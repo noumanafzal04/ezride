@@ -1,195 +1,273 @@
-import React, {useState} from 'react';
+import React, { useState, useRef } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
-    StatusBar, Switch, Modal, TextInput,
+    StatusBar, Modal, ActivityIndicator, PanResponder, Alert, Linking,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
-import Sidebar from "../../components/Sidebar";
+import Sidebar from '../../components/Sidebar';
+import BottomSheet from '../../components/BottomSheet';
+import ReviewSheet from '../../components/ReviewSheet';
+import useRidePosts, { useCancelRidePost } from '../../hooks/useRidePosts';
+import { useDriverBookings, useBookingActions } from '../../hooks/useDriverBookings';
+import { useCompleteBooking, useRateBooking } from '../../hooks/useReview';
 
-const TABS = [
-    {key: 'Accepted', count: 2},
-    {key: 'Pending', count: 1},
-    {key: 'Archived', count: 5},
-];
-
-const REQUESTS = {
-    Accepted: [
-        {
-            id: '1',
-            name: 'Amir Shehzad',
-            rating: 4.9,
-            rides: 120,
-            price: 'Rs. 2500',
-            seats: 2,
-            from: 'Valencia Housing Society, Defence Road, Lahore',
-            to: 'Dulha House, City Center, Satellite Town, Islamabad',
-            date: 'Jan 12, 2025 - Wednesday - 6:00 pm',
-            tags: ['Shared', 'Cash'],
-            posted: 'Posted 2 Hours Ago'
-        },
-        {
-            id: '2',
-            name: 'Amir Shehzad',
-            rating: 4.9,
-            rides: 120,
-            price: 'Rs. 2500',
-            seats: 2,
-            from: 'Lahore, Pakistan',
-            to: 'Islamabad, Pakistan',
-            date: 'Jan 12, 2025 - Wednesday - 6:00 pm',
-            tags: ['Shared', 'Cash'],
-            posted: 'Posted 2 Hours Ago'
-        },
-    ],
-    Pending: [
-        {
-            id: '3',
-            name: 'Amir Shehzad',
-            rating: 4.9,
-            rides: 120,
-            price: 'Rs. 2500',
-            seats: 2,
-            from: 'Valencia Housing Society, Defence Road, Lahore',
-            to: 'Dulha House, City Center, Satellite Town, Islamabad',
-            date: 'Jan 12, 2025 - Wednesday - 6:00 pm',
-            tags: ['Shared', 'Cash'],
-            posted: 'Posted 2 Hours Ago'
-        },
-    ],
-    Archived: [],
+// Format "2026-12-01T08:00:00.000000Z" → "01 Dec 2026 · 08:00"
+const fmtDeparture = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return d.toLocaleString('en-GB', {
+        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    }).replace(',', ' ·');
 };
 
-const MY_ORDERS = [
-    {
-        id: 'o1',
-        name: 'Kubra Malik',
-        rating: 4.5,
-        rides: 85,
-        price: 'Rs. 1800',
-        seats: 1,
-        from: 'DHA Phase 5, Lahore',
-        to: 'Bahria Town, Islamabad',
-        date: 'Jan 10, 2025 - Monday - 8:00 am',
-        tags: ['Private', 'Online'],
-        posted: 'Posted 5 Hours Ago'
-    },
-    {
-        id: 'o2',
-        name: 'Hassan Raza',
-        rating: 4.7,
-        rides: 200,
-        price: 'Rs. 3200',
-        seats: 3,
-        from: 'Gulberg III, Lahore',
-        to: 'F-10 Markaz, Islamabad',
-        date: 'Jan 9, 2025 - Sunday - 7:00 pm',
-        tags: ['Shared', 'Cash'],
-        posted: 'Posted 1 Day Ago'
-    },
-];
+const fmtPrice = (p) => `Rs ${Math.round(Number(p)).toLocaleString()}`;
 
-const RideRequestsScreen = ({navigation}) => {
-    const [activeSection, setActiveSection] = useState('requests'); // 'requests' | 'orders'
-    const [activeTab, setActiveTab] = useState('Accepted');
-    const [notify, setNotify] = useState(false);
-    const [offerModal, setOfferModal] = useState(false);
-    const [dateTime, setDateTime] = useState('');
+// Tab label → backend booking statuses
+const TABS = ['Pending', 'Accepted', 'Declined'];
+const TAB_STATUS = {
+    Pending:  ['pending'],
+    Accepted: ['accepted'],
+    Declined: ['rejected', 'cancelled'],
+};
+
+const isDue = (iso) => iso && new Date(iso).getTime() <= Date.now();
+
+// "2026-06-18T..." → "3h ago" / "2d ago"
+const timeAgo = (iso) => {
+    if (!iso) return '';
+    const diff = Date.now() - new Date(iso).getTime();
+    if (isNaN(diff)) return '';
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+};
+
+// Map a backend booking → the card shape this screen renders
+const mapBooking = (b) => ({
+    id: b.id,
+    name: `${b.passenger?.first_name || ''} ${b.passenger?.last_name || ''}`.trim() || 'Rider',
+    rating: null,
+    seats: b.seats_booked,
+    price: `Rs. ${Number(b.total_amount).toLocaleString()}`,
+    note: b.note || '',
+    requestedAt: timeAgo(b.created_at),
+    status: b.status,
+    departureAt: b.ride?.departure_at,
+    phone: b.passenger?.phone_number,
+});
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+const RideRequestsScreen = ({ navigation }) => {
+    const [activeTab, setActiveTab] = useState('Pending');
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [confirmModal, setConfirmModal] = useState(null); // { action: 'accept'|'decline', item }
 
+    // Driver's own posted rides (real API)
+    const postsQuery = useRidePosts();
+    const postedRides = postsQuery.data?.ride_posts || [];
+    const activePost = postedRides[0] || null;
 
-    const currentData = activeSection === 'requests'
-        ? (REQUESTS[activeTab] || [])
-        : MY_ORDERS;
+    // Expandable posted-ride sheet
+    const [postSheetVisible, setPostSheetVisible] = useState(false);
+    const openPostSheet = () => { if (activePost) setPostSheetVisible(true); };
 
-    const renderCard = ({item}) => {
-        const isAccepted = activeTab === 'Accepted' && activeSection === 'requests';
+    const cancelPost = useCancelRidePost({
+        onSuccess: () => {
+            setPostSheetVisible(false);
+            Toast.show({ type: 'success', text1: 'Ride Cancelled', text2: 'Your post has been removed.' });
+        },
+        onError: (err) => {
+            const msg = err.response?.data?.message || 'Could not cancel. Please try again.';
+            Toast.show({ type: 'error', text1: 'Failed', text2: msg });
+        },
+    });
+
+    const handleCancelRide = () => {
+        if (!activePost) return;
+        Alert.alert(
+            'Cancel this ride?',
+            'Riders will no longer see this post. This cannot be undone.',
+            [
+                { text: 'Keep', style: 'cancel' },
+                { text: 'Cancel Ride', style: 'destructive', onPress: () => cancelPost.mutate(activePost.id) },
+            ],
+        );
+    };
+
+    // Swipe-up on the peek bar opens the sheet
+    const peekPan = useRef(
+        PanResponder.create({
+            onMoveShouldSetPanResponder: (_, g) => g.dy < -8 && Math.abs(g.dy) > Math.abs(g.dx),
+            onPanResponderRelease: (_, g) => { if (g.dy < -40) openPostSheet(); },
+        })
+    ).current;
+
+    // Bookings received on the driver's posts (all statuses, filtered per tab)
+    const bookingsQuery = useDriverBookings();
+    const allBookings = bookingsQuery.data || [];
+    const { accept, reject } = useBookingActions();
+
+    const [reviewItem, setReviewItem] = useState(null);
+
+    const completeBooking = useCompleteBooking({
+        onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
+    });
+
+    const rateBooking = useRateBooking({
+        onSuccess: () => { setReviewItem(null); Toast.show({ type: 'success', text1: 'Thanks for your review!' }); },
+        onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
+    });
+
+    const handleComplete = (item) =>
+        completeBooking.mutate(item.id, { onSuccess: () => setReviewItem(item) });
+
+    const callRider = (phone) => phone && Linking.openURL(`tel:${phone}`);
+
+    const currentList = allBookings
+        .filter(b => TAB_STATUS[activeTab].includes(b.status))
+        .map(mapBooking);
+
+    const tabCount = (tab) => allBookings.filter(b => TAB_STATUS[tab].includes(b.status)).length;
+
+    // ── Actions ──────────────────────────────────────────────────────────────
+
+    const handleAction = (action, item) => {
+        if (action === 'chat') {
+            navigation.navigate('ChatDetail', { user: item });
+            return;
+        }
+        setConfirmModal({ action, item });
+    };
+
+    const confirmAction = () => {
+        const { action, item } = confirmModal;
+        const mutation = action === 'accept' ? accept : reject;
+
+        mutation.mutate(item.id, {
+            onSuccess: () => {
+                Toast.show({
+                    type: 'success',
+                    text1: action === 'accept' ? 'Booking Accepted' : 'Booking Declined',
+                });
+                setActiveTab(action === 'accept' ? 'Accepted' : 'Declined');
+            },
+            onError: (err) => {
+                const msg = err.response?.data?.message || 'Action failed. Please try again.';
+                Toast.show({ type: 'error', text1: 'Failed', text2: msg });
+            },
+        });
+        setConfirmModal(null);
+    };
+
+    // ── Card ─────────────────────────────────────────────────────────────────
+
+    const renderCard = ({ item }) => {
+        const isPending = item.status === 'pending';
+        const isAccepted = item.status === 'accepted';
+        const isDeclined = item.status === 'rejected' || item.status === 'cancelled';
+        const canComplete = isAccepted && isDue(item.departureAt);
 
         return (
-            <View style={styles.requestCard}>
-                {/* Driver Row */}
-                <View style={styles.driverRow}>
+            <View style={styles.card}>
+                {/* Rider row */}
+                <View style={styles.riderRow}>
                     <View style={styles.avatar}>
-                        <Icon name="account" size={22} color="#CCCCCC"/>
+                        <Icon name="account" size={22} color="#CCCCCC" />
                     </View>
-                    <View style={styles.driverInfo}>
-                        <Text style={styles.driverName}>{item.name}</Text>
+                    <View style={styles.riderInfo}>
+                        <Text style={styles.riderName}>{item.name}</Text>
                         <View style={styles.ratingRow}>
-                            <Icon name="star" size={12} color="#F5A247"/>
-                            <Text style={styles.ratingText}>{item.rating} ({item.rides} Rides)</Text>
+                            <Icon name="star" size={12} color="#F5A247" />
+                            <Text style={styles.ratingText}>
+                                {item.rating ? `${item.rating}` : 'New rider'}
+                            </Text>
                         </View>
                     </View>
                     <View style={styles.priceCol}>
-                        <Text style={styles.offerPrice}>{item.price}</Text>
-                        <Text style={styles.offerSeats}>{item.seats} Seats</Text>
+                        <Text style={styles.cardPrice}>{item.price}</Text>
+                        <Text style={styles.cardSeats}>
+                            <Icon name="account-outline" size={11} color="#109F2A" /> {item.seats} seat{item.seats > 1 ? 's' : ''}
+                        </Text>
                     </View>
                 </View>
 
-                {/* Route */}
-                <View style={styles.infoRow}>
-                    <Icon name="map-marker-outline" size={14} color="#5D5F62"/>
-                    <Text style={styles.infoText}>{item.from}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                    <Icon name="map-marker-check-outline" size={14} color="#5D5F62"/>
-                    <Text style={styles.infoText}>{item.to}</Text>
-                </View>
-                <View style={styles.infoRow}>
-                    <Icon name="calendar-outline" size={14} color="#5D5F62"/>
-                    <Text style={styles.infoText}>{item.date}</Text>
+                {/* Note */}
+                {!!item.note && (
+                    <View style={styles.noteRow}>
+                        <Icon name="comment-text-outline" size={13} color="#9E9E9E" />
+                        <Text style={styles.noteText}>{item.note}</Text>
+                    </View>
+                )}
+
+                {/* Meta */}
+                <View style={styles.metaRow}>
+                    <Icon name="clock-outline" size={12} color="#AAAAAA" />
+                    <Text style={styles.metaText}>Requested {item.requestedAt}</Text>
+
+                    {/* Status badge */}
+                    {isAccepted && (
+                        <View style={[styles.statusBadge, styles.statusAccepted]}>
+                            <Text style={[styles.statusText, { color: '#109F2A' }]}>Accepted</Text>
+                        </View>
+                    )}
+                    {isDeclined && (
+                        <View style={[styles.statusBadge, styles.statusDeclined]}>
+                            <Text style={[styles.statusText, { color: '#D83F54' }]}>
+                                {item.status === 'cancelled' ? 'Cancelled' : 'Declined'}
+                            </Text>
+                        </View>
+                    )}
                 </View>
 
-                {/* Tags */}
-                <View style={styles.tagsRow}>
-                    {item.tags.map((tag, i) => (
-                        <React.Fragment key={tag}>
-                            <View style={styles.tag}>
-                                <Text style={styles.tagText}>{tag}</Text>
-                            </View>
-                            <Icon name="circle-small" size={14} color="#CCCCCC"/>
-                        </React.Fragment>
-                    ))}
-                    <Text style={styles.postedText}>{item.posted}</Text>
-                </View>
+                {/* Divider */}
+                <View style={styles.divider} />
 
                 {/* Actions */}
                 <View style={styles.actionRow}>
-                    {isAccepted ? (
+                    {isPending && (
                         <>
-                            <TouchableOpacity style={styles.cancelBtn}>
-                                <Text style={styles.cancelText}>Cancel</Text>
+                            <TouchableOpacity
+                                style={styles.declineBtn}
+                                onPress={() => handleAction('decline', item)}
+                            >
+                                <Text style={styles.declineBtnText}>Decline</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.chatBtn}>
-                                <Icon name="message-outline" size={14} color="#5D5F62"/>
-                                <Text style={styles.chatBtnText}>Chat</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.callBtn}>
-                                <Icon name="phone" size={14} color="#111111"/>
-                                <Text style={styles.callBtnText}>Call</Text>
+                            <TouchableOpacity
+                                style={styles.acceptBtn}
+                                onPress={() => handleAction('accept', item)}
+                            >
+                                <Text style={styles.acceptBtnText}>Accept</Text>
                             </TouchableOpacity>
                         </>
-                    ) : activeSection === 'orders' ? (
+                    )}
+
+                    {/* Accepted → contact the rider */}
+                    {isAccepted && (
                         <>
-                            <TouchableOpacity style={styles.cancelBtn}>
-                                <Text style={styles.cancelText}>Cancel</Text>
+                            <TouchableOpacity style={styles.chatBtn} onPress={() => handleAction('chat', item)}>
+                                <Icon name="message-outline" size={15} color="#5D5F62" />
+                                <Text style={styles.chatBtnText}>Message</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity style={styles.chatBtn}>
-                                <Icon name="message-outline" size={14} color="#5D5F62"/>
-                                <Text style={styles.chatBtnText}>Chat</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.callBtn}>
-                                <Icon name="phone" size={14} color="#111111"/>
+                            <TouchableOpacity style={styles.callBtn} onPress={() => callRider(item.phone)}>
+                                <Icon name="phone" size={15} color="#FFFFFF" />
                                 <Text style={styles.callBtnText}>Call</Text>
                             </TouchableOpacity>
-                        </>
-                    ) : (
-                        <>
-                            <TouchableOpacity style={styles.declineBtn}>
-                                <Text style={styles.declineText}>Decline</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.sendOfferBtn} onPress={() => setOfferModal(true)}>
-                                <Text style={styles.sendOfferText}>Send Offer</Text>
-                            </TouchableOpacity>
+                            {canComplete && (
+                                <TouchableOpacity
+                                    style={styles.acceptBtn}
+                                    onPress={() => handleComplete(item)}
+                                    disabled={completeBooking.isPending}
+                                >
+                                    <Text style={styles.acceptBtnText}>Complete</Text>
+                                </TouchableOpacity>
+                            )}
                         </>
                     )}
                 </View>
@@ -197,152 +275,280 @@ const RideRequestsScreen = ({navigation}) => {
         );
     };
 
+    // ── Empty State ───────────────────────────────────────────────────────────
+
+    const renderEmpty = () => (
+        <View style={styles.emptyState}>
+            <Icon
+                name={activeTab === 'Pending' ? 'account-clock-outline' : activeTab === 'Accepted' ? 'account-check-outline' : 'account-cancel-outline'}
+                size={52}
+                color="#DDDDDD"
+            />
+            <Text style={styles.emptyTitle}>
+                {activeTab === 'Pending' ? 'No pending requests' : activeTab === 'Accepted' ? 'No accepted bookings' : 'No declined requests'}
+            </Text>
+            <Text style={styles.emptySubtitle}>
+                {activeTab === 'Pending' ? 'Booking requests will appear here.' : 'Riders you accept will show here.'}
+            </Text>
+        </View>
+    );
+
+    // ── Render ────────────────────────────────────────────────────────────────
+
     return (
         <View style={styles.root}>
-            <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content"/>
+            <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
             {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => setSidebarOpen(true)}>
                     <Icon name="menu" size={24} color="#07163B" />
                 </TouchableOpacity>
-
-                <Text style={styles.headerTitle}>Ride Requests</Text>
+                <Text style={styles.headerTitle}>Booking Requests</Text>
                 <TouchableOpacity>
-                    <Icon name="bell-outline" size={24} color="#07163B"/>
+                    <Icon name="bell-outline" size={24} color="#07163B" />
+                    {tabCount('Pending') > 0 && (
+                        <View style={styles.bellBadge}>
+                            <Text style={styles.bellBadgeText}>{tabCount('Pending')}</Text>
+                        </View>
+                    )}
                 </TouchableOpacity>
             </View>
 
-            {/* Search Section - only for requests */}
-            {activeSection === 'requests' && (
-                <View style={styles.searchSection}>
-                    {/* From Input */}
-                    <View style={styles.searchInput}>
-                        <Text style={styles.searchInputText}>Lahore</Text>
-                        <Icon name="crosshairs-gps" size={17} color="#9E9E9E"/>
-                    </View>
-
-                    {/* To Input */}
-                    <View style={styles.searchInput}>
-                        <Text style={styles.searchInputText}>Islamabad</Text>
-                        <Icon name="crosshairs-gps" size={17} color="#9E9E9E"/>
-                    </View>
-
-                    {/* Date + Search Row */}
-                    <View style={styles.dateSearchRow}>
-                        <View style={[styles.searchInput, {flex: 1}]}>
-                            <Text style={styles.searchInputPlaceholder}>Date</Text>
-                            <Icon name="calendar-outline" size={17} color="#9E9E9E"/>
-                        </View>
-                        <TouchableOpacity style={styles.searchBtn}>
-                            <Text style={styles.searchBtnText}>Search</Text>
-                            <Icon name="magnify" size={17} color="#111111"/>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Notify Toggle */}
-                    <View style={styles.notifyRow}>
-                        <Text style={styles.notifyText}>Notify me about new requests</Text>
-                        <Switch
-                            value={notify}
-                            onValueChange={setNotify}
-                            trackColor={{false: '#E0E0E0', true: '#FFD400'}}
-                            thumbColor="#FFFFFF"
-                            ios_backgroundColor="#E0E0E0"
-                            style={{transform: [{scaleX: 0.85}, {scaleY: 0.85}]}}
-                        />
-                    </View>
-                </View>
-            )}
-
-            {/* Tabs - only for requests */}
-            {activeSection !== 'requests' && (
-                <View style={styles.tabsRow}>
-                    {TABS.map(tab => (
-                        <TouchableOpacity
-                            key={tab.key}
-                            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-                            onPress={() => setActiveTab(tab.key)}
-                        >
-                            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
-                                {tab.key} ({tab.count})
-                            </Text>
-                        </TouchableOpacity>
-                    ))}
-                </View>
-            )}
-
-            {/* My Orders Header */}
-            {activeSection === 'orders' && (
-                <View style={styles.ordersHeader}>
-                    <Text style={styles.ordersHeaderTitle}>My Orders</Text>
-                </View>
-            )}
+            {/* Tabs */}
+            <View style={styles.tabsRow}>
+                {TABS.map(tab => (
+                    <TouchableOpacity
+                        key={tab}
+                        style={[styles.tab, activeTab === tab && styles.tabActive]}
+                        onPress={() => setActiveTab(tab)}
+                    >
+                        <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
+                            {tab}
+                        </Text>
+                        {tabCount(tab) > 0 && (
+                            <View style={[
+                                styles.tabBadge,
+                                activeTab === tab ? styles.tabBadgeActive : null,
+                            ]}>
+                                <Text style={[
+                                    styles.tabBadgeText,
+                                    activeTab === tab ? styles.tabBadgeTextActive : null,
+                                ]}>
+                                    {tabCount(tab)}
+                                </Text>
+                            </View>
+                        )}
+                    </TouchableOpacity>
+                ))}
+            </View>
 
             {/* List */}
             <FlatList
-                data={currentData}
-                keyExtractor={item => item.id}
+                data={currentList}
+                keyExtractor={item => String(item.id)}
                 renderItem={renderCard}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.list}
+                refreshing={bookingsQuery.isFetching}
+                onRefresh={bookingsQuery.refetch}
                 ListEmptyComponent={
-                    <View style={styles.emptyState}>
-                        <Icon name="car-off" size={48} color="#DDDDDD" />
-                        <Text style={styles.emptyText}>
-                            {activeSection === 'orders' ? 'No orders found' : `No ${activeTab.toLowerCase()} requests`}
-                        </Text>
-                    </View>
+                    bookingsQuery.isLoading
+                        ? <ActivityIndicator color="#FFD400" style={{ marginTop: 40 }} />
+                        : renderEmpty()
                 }
             />
 
-            {/* Bottom Switcher */}
-            <View style={styles.bottomSwitcher}>
-                <TouchableOpacity
-                    style={[styles.switcherBtn, activeSection === 'requests' && styles.switcherBtnActive]}
-                    onPress={() => setActiveSection('requests')}
-                >
-                    <Text style={[styles.switcherText, activeSection === 'requests' && styles.switcherTextActive]}>
-                        Ride Requests
-                    </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.switcherBtn, activeSection === 'orders' && styles.switcherBtnActive]}
-                    onPress={() => setActiveSection('orders')}
-                >
-                    <Text style={[styles.switcherText, activeSection === 'orders' && styles.switcherTextActive]}>
-                        My Orders
-                    </Text>
-                </TouchableOpacity>
-            </View>
+            {/* ── Pinned Bottom: collapsed peek of the driver's posted ride ──── */}
+            {postsQuery.isLoading ? (
+                <View style={styles.peekBar}>
+                    <ActivityIndicator color="#07163B" style={{ paddingVertical: 14 }} />
+                </View>
+            ) : !activePost ? (
+                <View style={styles.peekBar}>
+                    <View style={styles.peekEmptyRow}>
+                        <Text style={styles.postedEmptyText}>No active ride post.</Text>
+                        <TouchableOpacity
+                            style={styles.postNowBtn}
+                            onPress={() => navigation.navigate('PostRide')}
+                            activeOpacity={0.85}
+                        >
+                            <Icon name="plus" size={15} color="#111111" />
+                            <Text style={styles.postNowText}>Post a Ride</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            ) : (
+                <View style={styles.peekBar}>
+                    {/* swipe-up handle */}
+                    <View style={styles.peekHandleArea} {...peekPan.panHandlers}>
+                        <View style={styles.peekHandle} />
+                    </View>
+                    <TouchableOpacity onPress={openPostSheet} activeOpacity={0.8}>
+                        <View style={styles.peekTitleRow}>
+                            <Text style={styles.peekTitle}>Your Posted Ride</Text>
+                            <Icon name="chevron-up" size={18} color="#9AA0A6" />
+                        </View>
+                        <View style={styles.peekRouteRow}>
+                            <Text style={styles.peekRoute} numberOfLines={1}>
+                                {activePost.from?.city?.name}
+                                <Text style={styles.postedArrow}>  →  </Text>
+                                {activePost.to?.city?.name}
+                            </Text>
+                            <View style={styles.seatsTag}>
+                                <Icon name="account-multiple-outline" size={13} color="#07163B" />
+                                <Text style={styles.seatsTagText}>{activePost.available_seats ?? '—'}</Text>
+                            </View>
+                        </View>
+                        <Text style={styles.peekDate}>{fmtDeparture(activePost.departure_at)}</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
 
-            {/* Send Offer Modal */}
-            <Modal visible={offerModal} transparent animationType="slide">
+            {/* ── Expanded posted-ride sheet ─────────────────────────────────── */}
+            <BottomSheet visible={postSheetVisible} onClose={() => setPostSheetVisible(false)}>
+                {activePost && (
+                    <View style={styles.sheetBody}>
+                        <Text style={styles.sheetTitle}>Your Posted Ride</Text>
+
+                        {/* Route + addresses */}
+                        <View style={styles.sheetRoute}>
+                            <View style={styles.sheetRouteItem}>
+                                <Icon name="map-marker-outline" size={16} color="#109F2A" />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.sheetCity}>{activePost.from?.city?.name}</Text>
+                                    {!!activePost.from?.address && (
+                                        <Text style={styles.sheetAddr}>{activePost.from.address}</Text>
+                                    )}
+                                </View>
+                            </View>
+                            <View style={styles.sheetRouteItem}>
+                                <Icon name="map-marker-check-outline" size={16} color="#07163B" />
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.sheetCity}>{activePost.to?.city?.name}</Text>
+                                    {!!activePost.to?.address && (
+                                        <Text style={styles.sheetAddr}>{activePost.to.address}</Text>
+                                    )}
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* Meta chips */}
+                        <View style={styles.sheetChips}>
+                            <View style={styles.sheetChip}>
+                                <Icon name="calendar-clock" size={14} color="#5D5F62" />
+                                <Text style={styles.sheetChipText}>{fmtDeparture(activePost.departure_at)}</Text>
+                            </View>
+                            <View style={styles.sheetChip}>
+                                <Icon name="account-multiple-outline" size={14} color="#5D5F62" />
+                                <Text style={styles.sheetChipText}>{activePost.available_seats ?? '—'} seats</Text>
+                            </View>
+                            <View style={styles.sheetChip}>
+                                <Icon name="cash" size={14} color="#5D5F62" />
+                                <Text style={styles.sheetChipText}>{fmtPrice(activePost.price_per_seat)} / seat</Text>
+                            </View>
+                            <View style={styles.sheetChip}>
+                                <Icon name="car-outline" size={14} color="#5D5F62" />
+                                <Text style={styles.sheetChipText}>{activePost.post_type === 'private' ? 'Private' : 'Shared'}</Text>
+                            </View>
+                            {activePost.luggage_allowed && (
+                                <View style={styles.sheetChip}>
+                                    <Icon name="bag-suitcase-outline" size={14} color="#5D5F62" />
+                                    <Text style={styles.sheetChipText}>Luggage allowed</Text>
+                                </View>
+                            )}
+                        </View>
+
+                        {!!activePost.notes && (
+                            <View style={styles.sheetNote}>
+                                <Icon name="comment-text-outline" size={14} color="#9E9E9E" />
+                                <Text style={styles.sheetNoteText}>{activePost.notes}</Text>
+                            </View>
+                        )}
+
+                        {/* Cancel */}
+                        <TouchableOpacity
+                            style={styles.cancelRideBtn}
+                            onPress={handleCancelRide}
+                            disabled={cancelPost.isPending}
+                            activeOpacity={0.85}
+                        >
+                            <Icon name="close-circle-outline" size={18} color="#D83F54" />
+                            <Text style={styles.cancelRideText}>
+                                {cancelPost.isPending ? 'Cancelling…' : 'Cancel Ride'}
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                )}
+            </BottomSheet>
+
+            {/* ── Confirm Modal ────────────────────────────────────────────── */}
+            <Modal visible={!!confirmModal} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
                     <View style={styles.modalCard}>
-                        <View style={styles.modalHandle}/>
-                        <Text style={styles.modalTitle}>Offer Ride</Text>
-                        <Text style={styles.modalBody}>
-                            M. Arif has offered <Text style={styles.modalBold}>Rs. 2500</Text> for this trip. You can
-                            offer a different date for this ride.
-                        </Text>
-                        <View style={styles.modalInput}>
-                            <TextInput
-                                placeholder="Date & Time"
-                                placeholderTextColor="#AAAAAA"
-                                value={dateTime}
-                                onChangeText={setDateTime}
-                                style={styles.modalInputText}
-                            />
-                            <Icon name="calendar-outline" size={18} color="#5D5F62"/>
+                        <View style={styles.modalHandle} />
+
+                        {confirmModal?.action === 'accept' ? (
+                            <>
+                                <View style={styles.modalIconWrap}>
+                                    <Icon name="account-check-outline" size={32} color="#109F2A" />
+                                </View>
+                                <Text style={styles.modalTitle}>Accept Booking?</Text>
+                                <Text style={styles.modalBody}>
+                                    You're about to accept{' '}
+                                    <Text style={styles.modalBold}>{confirmModal?.item?.name}</Text>
+                                    {' '}({confirmModal?.item?.seats} seat{confirmModal?.item?.seats > 1 ? 's' : ''}) for this ride.
+                                    A seat will be reserved for them.
+                                </Text>
+                            </>
+                        ) : (
+                            <>
+                                <View style={styles.modalIconWrap}>
+                                    <Icon name="account-cancel-outline" size={32} color="#D83F54" />
+                                </View>
+                                <Text style={styles.modalTitle}>Decline Booking?</Text>
+                                <Text style={styles.modalBody}>
+                                    You're about to decline{' '}
+                                    <Text style={styles.modalBold}>{confirmModal?.item?.name}</Text>'s
+                                    booking request. They will be notified.
+                                </Text>
+                            </>
+                        )}
+
+                        <View style={styles.modalBtns}>
+                            <TouchableOpacity
+                                style={styles.modalCancelBtn}
+                                onPress={() => setConfirmModal(null)}
+                            >
+                                <Text style={styles.modalCancelText}>Go Back</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[
+                                    styles.modalConfirmBtn,
+                                    confirmModal?.action === 'decline' && styles.modalConfirmBtnRed,
+                                ]}
+                                onPress={confirmAction}
+                            >
+                                <Text style={[
+                                    styles.modalConfirmText,
+                                    confirmModal?.action === 'decline' && { color: '#FFFFFF' },
+                                ]}>
+                                    {confirmModal?.action === 'accept' ? 'Yes, Accept' : 'Yes, Decline'}
+                                </Text>
+                            </TouchableOpacity>
                         </View>
-                        <TouchableOpacity style={styles.sendOfferModalBtn} onPress={() => setOfferModal(false)}>
-                            <Text style={styles.sendOfferModalText}>Send Offer</Text>
-                        </TouchableOpacity>
                     </View>
                 </View>
             </Modal>
 
+            <ReviewSheet
+                visible={!!reviewItem}
+                onClose={() => setReviewItem(null)}
+                submitting={rateBooking.isPending}
+                title="Rate the rider"
+                subtitle={reviewItem?.name}
+                onSubmit={(rating, review) => rateBooking.mutate({ id: reviewItem.id, rating, review })}
+            />
 
             <Sidebar
                 visible={sidebarOpen}
@@ -354,8 +560,10 @@ const RideRequestsScreen = ({navigation}) => {
     );
 };
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-    root: {flex: 1, backgroundColor: '#F5F5F7'},
+    root: { flex: 1, backgroundColor: '#F5F5F7' },
 
     // Header
     header: {
@@ -374,67 +582,21 @@ const styles = StyleSheet.create({
         fontFamily: Fonts.semiBold,
         color: '#07163B',
     },
-
-    // Search Section
-    searchSection: {
-        backgroundColor: '#FFFFFF',
-        paddingHorizontal: 16,
-        paddingTop: 14,
-        paddingBottom: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: '#EAEDEE',
-        gap: 10,
-    },
-    searchInput: {
-        flexDirection: 'row',
+    bellBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -4,
+        width: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: '#D83F54',
         alignItems: 'center',
-        justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: '#EAEDEE',
-        borderRadius: 10,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
-        backgroundColor: '#FFFFFF',
+        justifyContent: 'center',
     },
-    searchInputText: {
-        fontSize: 14,
-        fontFamily: Fonts.medium,
-        color: '#202223',
-    },
-    searchInputPlaceholder: {
-        fontSize: 14,
-        fontFamily: Fonts.regular,
-        color: '#AAAAAA',
-    },
-    dateSearchRow: {
-        flexDirection: 'row',
-        gap: 10,
-        alignItems: 'center',
-    },
-    searchBtn: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        backgroundColor: '#FFD400',
-        borderRadius: 10,
-        paddingHorizontal: 18,
-        paddingVertical: 12,
-    },
-    searchBtnText: {
-        fontSize: 14,
-        fontFamily: Fonts.semiBold,
-        color: '#111111',
-    },
-    notifyRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingTop: 2,
-    },
-    notifyText: {
-        fontSize: 13,
-        fontFamily: Fonts.regular,
-        color: '#202223',
+    bellBadgeText: {
+        fontSize: 9,
+        fontFamily: Fonts.bold,
+        color: '#FFFFFF',
     },
 
     // Tabs
@@ -446,8 +608,11 @@ const styles = StyleSheet.create({
     },
     tab: {
         flex: 1,
-        paddingVertical: 13,
+        flexDirection: 'row',
         alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 13,
     },
     tabActive: {
         borderBottomWidth: 2,
@@ -459,160 +624,310 @@ const styles = StyleSheet.create({
         color: '#AAAAAA',
     },
     tabTextActive: {
-        fontSize: 13,
         fontFamily: Fonts.semiBold,
         color: '#07163B',
     },
-
-    // My Orders Header
-    ordersHeader: {
-        backgroundColor: '#FFFFFF',
-        paddingHorizontal: 20,
-        paddingVertical: 14,
-        borderBottomWidth: 1,
-        borderBottomColor: '#EAEDEE',
+    tabBadge: {
+        minWidth: 18,
+        height: 18,
+        borderRadius: 9,
+        backgroundColor: '#EAEDEE',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 4,
     },
-    ordersHeaderTitle: {
-        fontSize: 16,
-        fontFamily: Fonts.semiBold,
-        color: '#07163B',
-        textAlign: 'center',
+    tabBadgeActive: {
+        backgroundColor: '#FFD400',
+    },
+    tabBadgeText: {
+        fontSize: 10,
+        fontFamily: Fonts.bold,
+        color: '#5D5F62',
+    },
+    tabBadgeTextActive: {
+        color: '#111111',
     },
 
-    list: {padding: 16, paddingBottom: 100},
+    // List
+    list: { padding: 16, paddingBottom: 180 },
 
-    // Request Card
-    requestCard: {
+    // Card
+    card: {
         backgroundColor: '#FFFFFF',
         borderRadius: 16,
         borderWidth: 1,
         borderColor: '#EAEDEE',
         padding: 16,
         marginBottom: 12,
-        elevation: 1,
-        shadowColor: '#000',
-        shadowOffset: {width: 0, height: 1},
-        shadowOpacity: 0.04,
-        shadowRadius: 4,
+
     },
-    driverRow: {flexDirection: 'row', alignItems: 'center', marginBottom: 12},
+    riderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 10,
+    },
     avatar: {
-        width: 42, height: 42, borderRadius: 21,
+        width: 42,
+        height: 42,
+        borderRadius: 21,
         backgroundColor: '#EEEEEE',
-        alignItems: 'center', justifyContent: 'center', marginRight: 10,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 10,
     },
-    driverInfo: {flex: 1},
-    driverName: {fontSize: 14, fontFamily: Fonts.semiBold, color: '#202223', marginBottom: 3},
-    ratingRow: {flexDirection: 'row', alignItems: 'center', gap: 4},
-    ratingText: {fontSize: 12, fontFamily: Fonts.regular, color: '#5D5F62'},
-    priceCol: {alignItems: 'flex-end'},
-    offerPrice: {fontSize: 15, fontFamily: Fonts.bold, color: '#202223'},
-    offerSeats: {fontSize: 12, fontFamily: Fonts.medium, color: '#109F2A'},
+    riderInfo: { flex: 1 },
+    riderName: {
+        fontSize: 14,
+        fontFamily: Fonts.semiBold,
+        color: '#202223',
+        marginBottom: 3,
+    },
+    ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    ratingText: { fontSize: 12, fontFamily: Fonts.regular, color: '#5D5F62' },
+    priceCol: { alignItems: 'flex-end' },
+    cardPrice: { fontSize: 15, fontFamily: Fonts.bold, color: '#202223' },
+    cardSeats: { fontSize: 12, fontFamily: Fonts.medium, color: '#109F2A', marginTop: 2 },
 
-    infoRow: {flexDirection: 'row', alignItems: 'flex-start', gap: 7, marginBottom: 6},
-    infoText: {fontSize: 12, fontFamily: Fonts.regular, color: '#5D5F62', flex: 1, lineHeight: 17},
+    noteRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 6,
+        backgroundColor: '#F9F9F9',
+        borderRadius: 8,
+        paddingHorizontal: 10,
+        paddingVertical: 8,
+        marginBottom: 8,
+    },
+    noteText: {
+        fontSize: 12,
+        fontFamily: Fonts.regular,
+        color: '#5D5F62',
+        flex: 1,
+        lineHeight: 17,
+    },
 
-    tagsRow: {
-        flexDirection: 'row', alignItems: 'center',
-        flexWrap: 'wrap', gap: 2,
-        marginTop: 4, marginBottom: 12,
+    metaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        marginBottom: 10,
     },
-    tag: {
-        borderWidth: 1, borderColor: '#EAEDEE',
-        borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3,
+    metaText: {
+        fontSize: 11,
+        fontFamily: Fonts.regular,
+        color: '#AAAAAA',
+        flex: 1,
     },
-    tagText: {fontSize: 11, fontFamily: Fonts.regular, color: '#5D5F62'},
-    postedText: {fontSize: 11, fontFamily: Fonts.regular, color: '#AAAAAA'},
+    statusBadge: {
+        borderRadius: 6,
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+    },
+    statusAccepted: { backgroundColor: '#E8F8EE' },
+    reviewedPill: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, borderRadius: 10, backgroundColor: '#F5F5F7' },
+    reviewedPillText: { fontSize: 12, fontFamily: Fonts.medium, color: '#5D5F62' },
+    statusDeclined: { backgroundColor: '#FFF0F2' },
+    statusText: { fontSize: 11, fontFamily: Fonts.semiBold },
+
+    divider: { height: 1, backgroundColor: '#F0F0F0', marginBottom: 12 },
 
     actionRow: {
-        flexDirection: 'row', gap: 10,
-        paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F0F0F0',
+        flexDirection: 'row',
+        gap: 10,
+        alignItems: 'center',
     },
-    cancelBtn: {
-        flex: 1, paddingVertical: 10, borderRadius: 10,
-        borderWidth: 1, borderColor: '#D83F54', alignItems: 'center',
-    },
-    cancelText: {fontSize: 13, fontFamily: Fonts.semiBold, color: '#D83F54'},
     chatBtn: {
-        flex: 1, flexDirection: 'row', alignItems: 'center',
-        justifyContent: 'center', gap: 5,
-        paddingVertical: 10, borderRadius: 10,
-        borderWidth: 1, borderColor: '#EAEDEE',
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 5,
+        paddingVertical: 10,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#EAEDEE',
     },
-    chatBtnText: {fontSize: 13, fontFamily: Fonts.semiBold, color: '#5D5F62'},
+    chatBtnText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#5D5F62' },
     callBtn: {
-        flex: 1, flexDirection: 'row', alignItems: 'center',
-        justifyContent: 'center', gap: 5,
-        paddingVertical: 10, borderRadius: 10,
-        backgroundColor: '#FFD400',
+        flex: 1,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 5,
+        paddingVertical: 10,
+        borderRadius: 10,
+        backgroundColor: '#109F2A',
     },
-    callBtnText: {fontSize: 13, fontFamily: Fonts.semiBold, color: '#111111'},
+    callBtnText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#FFFFFF' },
     declineBtn: {
         flex: 1,
         paddingVertical: 10,
         borderRadius: 10,
         borderWidth: 1,
         borderColor: '#D83F54',
-        backgroundColor: '#F04B4B0F',
+        backgroundColor: '#FFF0F2',
         alignItems: 'center',
     },
-    declineText: {fontSize: 13, fontFamily: Fonts.semiBold, color: '#D83F54'},
-    sendOfferBtn: {
-        flex: 1.5, paddingVertical: 10, borderRadius: 10,
-        backgroundColor: '#FFD400', alignItems: 'center',
-    },
-    sendOfferText: {fontSize: 13, fontFamily: Fonts.semiBold, color: '#111111'},
-
-    emptyState: {alignItems: 'center', paddingTop: 60, gap: 12},
-    emptyText: {fontSize: 14, fontFamily: Fonts.regular, color: '#AAAAAA'},
-
-    // Bottom Switcher
-    bottomSwitcher: {
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        flexDirection: 'row', gap: 12,
-        backgroundColor: '#FFFFFF',
-        borderTopWidth: 1, borderTopColor: '#EAEDEE',
-        paddingHorizontal: 16, paddingTop: 12, paddingBottom: 24,
-    },
-    switcherBtn: {
-        flex: 1, paddingVertical: 12, borderRadius: 10,
-        borderWidth: 1, borderColor: '#EAEDEE',
-        alignItems: 'center',
-    },
-    switcherBtnActive: {
+    declineBtnText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#D83F54' },
+    acceptBtn: {
+        flex: 1,
+        paddingVertical: 10,
+        borderRadius: 10,
         backgroundColor: '#FFD400',
-        borderColor: '#FFD400',
+        alignItems: 'center',
     },
-    switcherText: {fontSize: 14, fontFamily: Fonts.semiBold, color: '#5D5F62'},
-    switcherTextActive: {color: '#111111'},
+    acceptBtnText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#111111' },
+
+    // Empty State
+    emptyState: { alignItems: 'center', paddingTop: 60, gap: 10 },
+    emptyTitle: { fontSize: 15, fontFamily: Fonts.semiBold, color: '#AAAAAA' },
+    emptySubtitle: { fontSize: 13, fontFamily: Fonts.regular, color: '#CCCCCC' },
+
+    // ── Pinned Bottom Bar ──────────────────────────────────────────────────
+    // ── Collapsed peek bar ──────────────────────────────────────────────────
+    peekBar: {
+        position: 'absolute',
+        bottom: 0, left: 0, right: 0,
+        backgroundColor: '#FFFFFF',
+        borderTopLeftRadius: 18, borderTopRightRadius: 18,
+        paddingHorizontal: 16,
+        paddingBottom: 26,
+        elevation: 14,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: -3 },
+        shadowOpacity: 0.10,
+        shadowRadius: 12,
+    },
+    peekHandleArea: { alignItems: 'center', paddingTop: 8, paddingBottom: 8 },
+    peekHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E0E0E0' },
+    peekEmptyRow: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        paddingTop: 16,
+    },
+    peekTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    peekTitle: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#07163B' },
+    peekRouteRow: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        gap: 10, marginTop: 6,
+    },
+    peekRoute: { flex: 1, fontSize: 15, fontFamily: Fonts.semiBold, color: '#202223' },
+    peekDate: { fontSize: 12, fontFamily: Fonts.regular, color: '#5D5F62', marginTop: 4 },
+    postedArrow: { fontFamily: Fonts.regular, color: '#9E9E9E' },
+
+    postedEmptyText: { fontSize: 13, fontFamily: Fonts.regular, color: '#9E9E9E' },
+    postNowBtn: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        backgroundColor: '#FFD400', borderRadius: 10,
+        paddingHorizontal: 16, paddingVertical: 10,
+    },
+    postNowText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#111111' },
+
+    seatsTag: {
+        flexDirection: 'row', alignItems: 'center', gap: 4,
+        backgroundColor: '#F5F5F7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6,
+    },
+    seatsTagText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#07163B' },
+
+    // ── Expanded sheet ──────────────────────────────────────────────────────
+    sheetBody: { paddingHorizontal: 20, paddingTop: 4 },
+    sheetTitle: { fontSize: 16, fontFamily: Fonts.semiBold, color: '#07163B', marginBottom: 16 },
+    sheetRoute: {
+        borderWidth: 1, borderColor: '#EAEDEE', borderRadius: 12, padding: 14, gap: 12, marginBottom: 14,
+    },
+    sheetRouteItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+    sheetCity: { fontSize: 14, fontFamily: Fonts.semiBold, color: '#202223' },
+    sheetAddr: { fontSize: 12, fontFamily: Fonts.regular, color: '#5D5F62', marginTop: 1 },
+    sheetChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+    sheetChip: {
+        flexDirection: 'row', alignItems: 'center', gap: 5,
+        backgroundColor: '#F5F5F7', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
+    },
+    sheetChipText: { fontSize: 12, fontFamily: Fonts.medium, color: '#5D5F62' },
+    sheetNote: {
+        flexDirection: 'row', alignItems: 'flex-start', gap: 6,
+        backgroundColor: '#F9F9F9', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 14,
+    },
+    sheetNoteText: { flex: 1, fontSize: 12, fontFamily: Fonts.regular, color: '#5D5F62', lineHeight: 17 },
+    cancelRideBtn: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+        paddingVertical: 15, borderRadius: 12, borderWidth: 1.5, borderColor: '#D83F54',
+        backgroundColor: '#FFF0F2',
+    },
+    cancelRideText: { fontSize: 15, fontFamily: Fonts.semiBold, color: '#D83F54' },
 
     // Modal
     modalOverlay: {
-        flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end',
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingHorizontal: 24,
     },
     modalCard: {
         backgroundColor: '#FFFFFF',
-        borderTopLeftRadius: 24, borderTopRightRadius: 24,
-        padding: 24, paddingBottom: 40,
+        borderRadius: 20,
+        padding: 24,
+        width: '100%',
     },
     modalHandle: {
         width: 36, height: 4, borderRadius: 2,
-        backgroundColor: '#E0E0E0', alignSelf: 'center', marginBottom: 20,
+        backgroundColor: '#E0E0E0',
+        alignSelf: 'center',
+        marginBottom: 16,
     },
-    modalTitle: {fontSize: 17, fontFamily: Fonts.semiBold, color: '#07163B', marginBottom: 10},
-    modalBody: {fontSize: 14, fontFamily: Fonts.regular, color: '#5D5F62', lineHeight: 22, marginBottom: 20},
-    modalBold: {fontFamily: Fonts.semiBold, color: '#202223'},
-    modalInput: {
-        flexDirection: 'row', alignItems: 'center',
-        borderWidth: 1, borderColor: '#EAEDEE',
-        borderRadius: 10, paddingHorizontal: 14,
-        paddingVertical: 13, marginBottom: 16,
+    modalIconWrap: {
+        width: 60, height: 60, borderRadius: 30,
+        backgroundColor: '#F5F5F7',
+        alignItems: 'center',
+        justifyContent: 'center',
+        alignSelf: 'center',
+        marginBottom: 14,
     },
-    modalInputText: {flex: 1, fontSize: 14, fontFamily: Fonts.regular, color: '#202223'},
-    sendOfferModalBtn: {
-        backgroundColor: '#FFD400', borderRadius: 12, paddingVertical: 15, alignItems: 'center',
+    modalTitle: {
+        fontSize: 17,
+        fontFamily: Fonts.semiBold,
+        color: '#07163B',
+        textAlign: 'center',
+        marginBottom: 10,
     },
-    sendOfferModalText: {fontSize: 15, fontFamily: Fonts.semiBold, color: '#111111'},
+    modalBody: {
+        fontSize: 14,
+        fontFamily: Fonts.regular,
+        color: '#5D5F62',
+        lineHeight: 22,
+        textAlign: 'center',
+        marginBottom: 24,
+    },
+    modalBold: { fontFamily: Fonts.semiBold, color: '#202223' },
+    modalBtns: { flexDirection: 'row', gap: 12 },
+    modalCancelBtn: {
+        flex: 1,
+        paddingVertical: 13,
+        borderRadius: 10,
+        borderWidth: 1,
+        borderColor: '#EAEDEE',
+        alignItems: 'center',
+    },
+    modalCancelText: {
+        fontSize: 14,
+        fontFamily: Fonts.semiBold,
+        color: '#5D5F62',
+    },
+    modalConfirmBtn: {
+        flex: 1,
+        paddingVertical: 13,
+        borderRadius: 10,
+        backgroundColor: '#FFD400',
+        alignItems: 'center',
+    },
+    modalConfirmBtnRed: {
+        backgroundColor: '#D83F54',
+    },
+    modalConfirmText: {
+        fontSize: 14,
+        fontFamily: Fonts.semiBold,
+        color: '#111111',
+    },
 });
 
 export default RideRequestsScreen;

@@ -1,6 +1,7 @@
 import React from 'react';
 import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
+import {navigationRef} from './navigationRef';
 import SplashScreen from '../screens/auth/SplashScreen';
 import OnboardingScreen from '../screens/auth/OnboardingScreen';
 import RoleSelectScreen from '../screens/auth/RoleSelectScreen';
@@ -10,9 +11,10 @@ import SignupScreen from '../screens/auth/SignupScreen';
 import MainNavigator from './MainNavigator';
 import ProfileScreen from '../screens/settings/ProfileScreen';
 import EditProfileScreen from '../screens/settings/EditProfileScreen';
-import CreateRequestScreen from '../screens/user/CreateRequestScreen';
-import RideOffersScreen from '../screens/user/RideOffersScreen';
-import DriverDetailScreen from '../screens/user/DriverDetailScreen';
+import PostRideScreen from '../screens/driver/PostRideScreen';
+import AvailableRidesScreen from '../screens/user/AvailableRidesScreen';
+import RideDetailScreen from '../screens/driver/RideDetailScreen';
+import RideHistoryScreen from '../screens/user/RideHistoryScreen';
 import ChatsScreen from "../screens/chat/ChatsScreen";
 import ChatDetailScreen from "../screens/chat/ChatDetailScreen";
 import MarketplaceScreen from "../screens/buysell/MarketplaceScreen";
@@ -24,12 +26,13 @@ import TopUpScreen from "../screens/user/TopUpScreen";
 import HistoryScreen from "../screens/user/HistoryScreen";
 import SettingsScreen from "../screens/settings/SettingsScreen";
 import HelpSupportScreen from "../screens/settings/HelpSupportScreen";
+import DriverOnboardingScreen from '../screens/driver/DriverOnboardingScreen';
 
 const Stack = createNativeStackNavigator();
 
 const AppNavigator = () => {
     return (
-        <NavigationContainer>
+        <NavigationContainer ref={navigationRef}>
             <Stack.Navigator screenOptions={{headerShown: false}} initialRouteName="Splash">
                 <Stack.Screen name="Splash" component={SplashScreen}/>
                 <Stack.Screen name="Onboarding" component={OnboardingScreen}/>
@@ -42,9 +45,10 @@ const AppNavigator = () => {
                 <Stack.Screen name="Profile" component={ProfileScreen}/>
                 <Stack.Screen name="EditProfile" component={EditProfileScreen}/>
 
-                <Stack.Screen name="CreateRequest" component={CreateRequestScreen}/>
-                <Stack.Screen name="RideOffers" component={RideOffersScreen}/>
-                <Stack.Screen name="DriverDetail" component={DriverDetailScreen}/>
+                <Stack.Screen name="PostRide" component={PostRideScreen}/>
+                <Stack.Screen name="AvailableRides" component={AvailableRidesScreen}/>
+                <Stack.Screen name="RideDetail" component={RideDetailScreen}/>
+                <Stack.Screen name="RideHistory" component={RideHistoryScreen}/>
 
                 <Stack.Screen name="Chats" component={ChatsScreen}/>
                 <Stack.Screen name="ChatDetail" component={ChatDetailScreen}/>
@@ -59,6 +63,7 @@ const AppNavigator = () => {
                 <Stack.Screen name="History" component={HistoryScreen}/>
                 <Stack.Screen name="Settings" component={SettingsScreen}/>
                 <Stack.Screen name="HelpSupport" component={HelpSupportScreen}/>
+                <Stack.Screen name="DriverOnboarding" component={DriverOnboardingScreen}/>
 
             </Stack.Navigator>
         </NavigationContainer>

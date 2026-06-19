@@ -70,7 +70,7 @@ const RidesScreen = ({ navigation }) => {
     const renderOffer = ({ item }) => (
         <TouchableOpacity
             style={styles.offerCard}
-            onPress={() => navigation.navigate('DriverDetail', { offer: item })}
+            onPress={() => navigation.navigate('RideDetail', { offer: item })}
             activeOpacity={0.85}
         >
             {/* Driver Info Row */}
@@ -118,7 +118,7 @@ const RidesScreen = ({ navigation }) => {
                 </TouchableOpacity>
                 <TouchableOpacity
                     style={styles.acceptBtn}
-                    onPress={() => navigation.navigate('DriverDetail', { offer: item })}
+                    onPress={() => navigation.navigate('RideDetail', { offer: item })}
                 >
                     <Text style={styles.acceptText}>Accept</Text>
                 </TouchableOpacity>

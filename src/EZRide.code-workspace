@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../../ezride-backend/Ride-App-Backend"
+		}
+	],
+	"settings": {}
+}

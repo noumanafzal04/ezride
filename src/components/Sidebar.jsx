@@ -6,6 +6,9 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../constants/fonts';
 import {useApp} from '../context/AppContext';
+import useAuth from "../hooks/useAuth";
+import useUserStore from '../store/userStore';
+
 
 const {width} = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.82;
@@ -13,13 +16,20 @@ const SIDEBAR_WIDTH = width * 0.82;
 const NAV_ITEMS = [
     {key: 'Home', label: 'Home', icon: 'home-outline'},
     {key: 'Rides', label: 'Rides', icon: 'car-outline'},
+    {key: 'RideHistory', label: 'Ride History', icon: 'history'},
     {key: 'BuySell', label: 'Buy/Sell Cars', icon: 'tag-outline'},
     {key: 'Chats', label: 'Inbox', icon: 'message-outline', badge: 8},
 ];
 
 const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
     const {role, setRole} = useApp();
+    const { logout } = useAuth();
+    const user = useUserStore(s => s.user);
+
     const isDriver = role === 'driver';
+    const isActualDriver = user?.user_type === 'driver';
+    const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'EZRide User';
+    const initial = (user?.first_name?.[0] || 'E').toUpperCase();
 
     const handleNav = (key) => {
         onClose();
@@ -47,10 +57,13 @@ const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
                     {/* User Info */}
                     <View style={styles.userSection}>
                         <View style={styles.userAvatar}>
-                            <Icon name="account" size={28} color="#CCCCCC"/>
+                            <Text style={styles.userInitial}>{initial}</Text>
                         </View>
-                        <View>
-                            <Text style={styles.userName}>Amir Shehzad</Text>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.userName} numberOfLines={1}>{fullName}</Text>
+                            {!!user?.phone_number && (
+                                <Text style={styles.userPhone}>{user.phone_number}</Text>
+                            )}
                             <TouchableOpacity
                                 style={styles.viewProfileRow}
                                 onPress={() => {
@@ -64,21 +77,23 @@ const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
                         </View>
                     </View>
 
-                    {/* Role Switcher */}
-                    <View style={styles.roleSwitcher}>
-                        <TouchableOpacity
-                            style={[styles.roleBtn, !isDriver && styles.roleBtnInactive]}
-                            onPress={() => switchRole('driver')}
-                        >
-                            <Text style={[styles.roleText, !isDriver && styles.roleTextInactive]}>Driver</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={[styles.roleBtn, isDriver && styles.roleBtnInactive]}
-                            onPress={() => switchRole('rider')}
-                        >
-                            <Text style={[styles.roleText, isDriver && styles.roleTextInactive]}>Passenger</Text>
-                        </TouchableOpacity>
-                    </View>
+                    {/* Role Switcher — only for onboarded drivers (they can also ride) */}
+                    {isActualDriver && (
+                        <View style={styles.roleSwitcher}>
+                            <TouchableOpacity
+                                style={[styles.roleBtn, !isDriver && styles.roleBtnInactive]}
+                                onPress={() => switchRole('driver')}
+                            >
+                                <Text style={[styles.roleText, !isDriver && styles.roleTextInactive]}>Driver</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.roleBtn, isDriver && styles.roleBtnInactive]}
+                                onPress={() => switchRole('rider')}
+                            >
+                                <Text style={[styles.roleText, isDriver && styles.roleTextInactive]}>Passenger</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
 
                     {/* Nav Items */}
                     <View style={styles.navSection}>
@@ -120,9 +135,16 @@ const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
                             <Icon name="help-circle-outline" size={20} color="#5D5F62" />
                             <Text style={styles.bottomItemText}>Help & Support</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={styles.bottomItem}>
-                            <Icon name="power" size={20} color="#D83F54"/>
-                            <Text style={[styles.bottomItemText, {color: '#D83F54'}]}>Log Out</Text>
+                        <TouchableOpacity
+                            style={styles.bottomItem}
+                            onPress={() => {
+                                onClose();
+                                logout();
+                                navigation.replace('Login');
+                            }}
+                        >
+                            <Icon name="power" size={20} color="#D83F54" />
+                            <Text style={[styles.bottomItemText, { color: '#D83F54' }]}>Log Out</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -168,13 +190,24 @@ const styles = StyleSheet.create({
     },
     userAvatar: {
         width: 52, height: 52, borderRadius: 26,
-        backgroundColor: '#EEEEEE',
+        backgroundColor: '#FFD400',
         alignItems: 'center', justifyContent: 'center',
+    },
+    userInitial: {
+        fontSize: 22,
+        fontFamily: Fonts.bold,
+        color: '#07163B',
     },
     userName: {
         fontSize: 16,
         fontFamily: Fonts.semiBold,
         color: '#07163B',
+        marginBottom: 2,
+    },
+    userPhone: {
+        fontSize: 12,
+        fontFamily: Fonts.regular,
+        color: '#9AA0A6',
         marginBottom: 4,
     },
     viewProfileRow: {

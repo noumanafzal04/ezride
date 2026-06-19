@@ -8,11 +8,11 @@ import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import MarketplaceScreen from '../screens/buysell/MarketplaceScreen';
 
 // User
-import RideOffersScreen from '../screens/user/RideOffersScreen';
+import MyBookingsScreen from '../screens/user/MyBookingsScreen';
 
 // Driver
 import RideRequestsScreen from '../screens/driver/RideRequestsScreen';
-import CreateRequestScreen from "../screens/user/CreateRequestScreen";
+import PostRideScreen from "../screens/driver/PostRideScreen";
 
 
 const Tab = createBottomTabNavigator();
@@ -70,13 +70,13 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 
 const MainNavigator = () => {
     const { role } = useApp();
-    const RidesScreen = role === 'driver' ? RideRequestsScreen : RideOffersScreen;
+    const RidesScreen = role === 'driver' ? RideRequestsScreen : MyBookingsScreen;
 
     return (
         <Tab.Navigator tabBar={props => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
             <Tab.Screen name="Home" component={HomeScreen} />
             <Tab.Screen name="Rides" component={RidesScreen} />
-            <Tab.Screen name="Post" component={CreateRequestScreen} />
+            <Tab.Screen name="Post" component={PostRideScreen} />
             <Tab.Screen name="BuySell" component={MarketplaceScreen} />
             <Tab.Screen name="Notifications" component={NotificationsScreen} />
         </Tab.Navigator>
@@ -91,6 +91,7 @@ const styles = StyleSheet.create({
         borderTopColor: '#F0F0F0',
         alignItems: 'center',
         paddingTop: 10,
+        paddingBottom: 36, // ← add this
         elevation: 12,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -3 },

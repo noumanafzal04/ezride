@@ -1,0 +1,29 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import rideService from '../services/rideService';
+
+// Rider: their own bookings (optional status filter)
+export const useMyBookings = (status, options = {}) =>
+    useQuery({
+        queryKey: ['my-bookings', status || 'all'],
+        queryFn: () =>
+            rideService.getMyBookings(status ? { status } : {})
+                .then(r => r.data?.data?.bookings || []),
+        staleTime: 15 * 1000,
+        ...options,
+    });
+
+// Rider: cancel their own booking
+export const useCancelBooking = (options = {}) => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id) => rideService.cancelBooking(id),
+        onSuccess: (...args) => {
+            qc.invalidateQueries({ queryKey: ['my-bookings'] });
+            qc.invalidateQueries({ queryKey: ['available-rides'] });
+            options.onSuccess?.(...args);
+        },
+        onError: options.onError,
+    });
+};
+
+export default useMyBookings;
