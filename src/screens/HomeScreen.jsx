@@ -17,6 +17,7 @@ const CARD_WIDTH = width - 40; // 20px margin each side
 const ACTIONS = [
     {key: 'find', icon: 'magnify', label: 'Find Ride', route: 'AvailableRides'},
     {key: 'post', icon: 'plus-circle-outline', label: 'Post Ride', route: 'PostRide'},
+    {key: 'inspect', icon: 'car-wrench', label: 'Inspect', route: 'InspectionRequest'},
     {key: 'buysell', icon: 'tag-outline', label: 'Buy / Sell', route: 'Marketplace'},
     {key: 'history', icon: 'clock-outline', label: 'History', route: 'History'},
 ];

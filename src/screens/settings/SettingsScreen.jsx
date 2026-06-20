@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
+import useMe from '../../hooks/useMe';
 
 const SECTIONS = [
     {
@@ -43,6 +44,7 @@ const SECTIONS = [
 
 const SettingsScreen = ({navigation}) => {
     const [toggles, setToggles] = useState({notifications: true, location: true});
+    const {data: me} = useMe();
 
     const toggle = (key) => setToggles(prev => ({...prev, [key]: !prev[key]}));
 
@@ -108,6 +110,26 @@ const SettingsScreen = ({navigation}) => {
                         </View>
                     </View>
                 ))}
+
+                {/* Admin (only for is_admin accounts — in-app testing tool) */}
+                {me?.is_admin && (
+                    <View style={styles.section}>
+                        <Text style={styles.sectionTitle}>Admin</Text>
+                        <View style={styles.sectionCard}>
+                            <TouchableOpacity
+                                style={styles.settingRow}
+                                onPress={() => navigation.navigate('AdminInspections')}
+                                activeOpacity={0.7}
+                            >
+                                <View style={styles.settingIconBox}>
+                                    <Icon name="clipboard-check-outline" size={18} color="#07163B"/>
+                                </View>
+                                <Text style={styles.settingLabel}>Inspection Requests</Text>
+                                <Icon name="chevron-right" size={18} color="#AAAAAA"/>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                )}
 
                 {/* Logout */}
                 <View style={styles.section}>

@@ -28,6 +28,12 @@ import HistoryScreen from "../screens/user/HistoryScreen";
 import SettingsScreen from "../screens/settings/SettingsScreen";
 import HelpSupportScreen from "../screens/settings/HelpSupportScreen";
 import DriverOnboardingScreen from '../screens/driver/DriverOnboardingScreen';
+import InspectionRequestScreen from '../screens/inspection/InspectionRequestScreen';
+import MyInspectionsScreen from '../screens/inspection/MyInspectionsScreen';
+import InspectionDetailScreen from '../screens/inspection/InspectionDetailScreen';
+import AdminInspectionsScreen from '../screens/inspection/AdminInspectionsScreen';
+import InspectionReportScreen from '../screens/inspection/InspectionReportScreen';
+import TrackInspectionScreen from '../screens/inspection/TrackInspectionScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -66,6 +72,13 @@ const AppNavigator = () => {
                 <Stack.Screen name="Settings" component={SettingsScreen}/>
                 <Stack.Screen name="HelpSupport" component={HelpSupportScreen}/>
                 <Stack.Screen name="DriverOnboarding" component={DriverOnboardingScreen}/>
+
+                <Stack.Screen name="InspectionRequest" component={InspectionRequestScreen}/>
+                <Stack.Screen name="MyInspections" component={MyInspectionsScreen}/>
+                <Stack.Screen name="InspectionDetail" component={InspectionDetailScreen}/>
+                <Stack.Screen name="AdminInspections" component={AdminInspectionsScreen}/>
+                <Stack.Screen name="InspectionReport" component={InspectionReportScreen}/>
+                <Stack.Screen name="TrackInspection" component={TrackInspectionScreen}/>
 
             </Stack.Navigator>
         </NavigationContainer>

@@ -150,6 +150,10 @@ const LoginScreen = ({navigation}) => {
                         <Text style={styles.linkBold}>Sign up</Text>
                     </TouchableOpacity>
                 </View>
+
+                <TouchableOpacity style={styles.trackRow} onPress={() => navigation.navigate('TrackInspection')}>
+                    <Text style={styles.linkBold}>Track a car inspection</Text>
+                </TouchableOpacity>
             </View>
 
             <TouchableOpacity style={styles.helpBtn}>
@@ -186,6 +190,7 @@ const styles = StyleSheet.create({
     },
     guestText: {fontSize: 15, fontFamily: Fonts.medium, color: '#5D5F62'},
     linkRow: {flexDirection: 'row', justifyContent: 'center'},
+    trackRow: {alignItems: 'center', marginTop: 14},
     linkText: {fontSize: 13, fontFamily: Fonts.regular, color: '#5D5F62'},
     linkBold: {fontSize: 13, fontFamily: Fonts.semiBold, color: '#1D3461'},
     helpBtn: {alignItems: 'center', paddingBottom: 40},

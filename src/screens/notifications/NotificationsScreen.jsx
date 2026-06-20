@@ -25,6 +25,7 @@ const TYPE_META = {
     ride_alert:        { icon: 'bell-ring-outline',      color: '#6C63FF', bg: '#F0EEFF' },
     review_received:   { icon: 'star-outline',           color: '#FFC107', bg: '#FFF8E1' },
     driver_verified:   { icon: 'shield-check-outline',   color: '#109F2A', bg: '#E8F8EE' },
+    inspection_update: { icon: 'car-wrench',             color: '#1D6AFF', bg: '#EEF4FF' },
 };
 const DEFAULT_META = { icon: 'bell-outline', color: '#6C63FF', bg: '#F0EEFF' };
 
@@ -56,10 +57,12 @@ const NotificationsScreen = ({ navigation }) => {
 
     const onPressItem = (item) => {
         if (!item.is_read) markRead.mutate(item.id);
-        const { ride_post_id: ridePostId, booking_id: bookingId } = item.data || {};
+        const { ride_post_id: ridePostId, booking_id: bookingId, inspection_request_id: inspectionId } = item.data || {};
         const t = item.type;
 
-        if (t === 'booking_requested' || t === 'booking_cancelled') {
+        if (t === 'inspection_update' && inspectionId) {
+            navigation.navigate('InspectionDetail', { id: inspectionId });
+        } else if (t === 'booking_requested' || t === 'booking_cancelled') {
             // Driver-facing → their Booking Requests screen (see who requested)
             navigation.navigate('Main', { screen: 'Rides' });
         } else if (t === 'ride_completed' && bookingId) {
