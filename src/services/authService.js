@@ -40,6 +40,11 @@ const authService = {
 
     me:     () => api.get('/auth/me'),
     logout: () => api.post('/auth/logout'),
+
+    // Update name + basic profile info (FormData; supports profile_image for riders)
+    updateProfile: (formData) => api.post('/auth/profile', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    }),
 };
 
 export default authService;

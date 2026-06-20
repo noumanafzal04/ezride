@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
     View, Text, StyleSheet, FlatList,
     TouchableOpacity, StatusBar, Modal, TextInput,
-    Image, ActivityIndicator,
+    Image, ActivityIndicator, Linking, Alert, Switch,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -10,6 +10,9 @@ import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
 import config from '../../config';
 import { useAvailableRides, useBookSeat } from '../../hooks/useAvailableRides';
+import { useMyBookings, useCancelBooking } from '../../hooks/useMyBookings';
+import { useRideAlerts, useCreateRideAlert, useDeleteRideAlert } from '../../hooks/useRideAlerts';
+import { useRidesRealtime, useRealtimeConnected } from '../../hooks/useRealtime';
 import { useCities } from '../../hooks/useLookup';
 import SelectSheet from '../../components/SelectSheet';
 
@@ -26,7 +29,7 @@ const fmtDate = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
-    return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
 // Map a backend ride_post into the card shape this screen renders
@@ -60,10 +63,59 @@ const mapRide = (p) => {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const AvailableRidesScreen = ({ navigation }) => {
+    // Live while the socket is up; poll only as a fallback if it drops.
+    const liveConnected = useRealtimeConnected();
+    const fallbackPoll = liveConnected ? false : 15000;
+
     // Filters that are actually applied to the query (empty = show all)
     const [appliedFilters, setAppliedFilters] = useState({});
-    const ridesQuery = useAvailableRides(appliedFilters);
-    const rides = (ridesQuery.data || []).map(mapRide);
+    const ridesQuery = useAvailableRides(appliedFilters, {
+        refetchInterval: fallbackPoll,
+        refetchIntervalInBackground: false,
+    });
+    // Flatten the infinite-query pages into one list
+    const rawRides = (ridesQuery.data?.pages || []).flatMap(p => p.ride_posts || []);
+    const rides = rawRides.map(mapRide);
+
+    // ── Rider's current ride (one active ride at a time) ──────────────────────
+    // Live via Reverb's user channel; falls back to polling only if the socket drops.
+    const myBookingsQuery = useMyBookings(undefined, {
+        refetchInterval: fallbackPoll,
+        refetchIntervalInBackground: false,
+    });
+    const myBookings = myBookingsQuery.data || [];
+    // Only an ACCEPTED (confirmed) ride locks the screen. Pending requests keep the
+    // rider browsing. Completed-ride reviews live in History / the ride-completed
+    // notification (Review screen) — never as a takeover on the search screen.
+    const activeBooking = myBookings.find(b => b.status === 'accepted');
+    const currentRide = activeBooking || null;
+    const pendingCount = myBookings.filter(b => b.status === 'pending').length;
+
+    const cancelBooking = useCancelBooking({
+        onSuccess: () => Toast.show({ type: 'success', text1: 'Booking Cancelled' }),
+        onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
+    });
+
+    const confirmCancelRide = (booking) => {
+        Alert.alert('Cancel booking?', 'Your seat request will be withdrawn.', [
+            { text: 'Keep', style: 'cancel' },
+            { text: 'Cancel Booking', style: 'destructive', onPress: () => cancelBooking.mutate(booking.id) },
+        ]);
+    };
+    const callDriver = (phone) => phone && Linking.openURL(`tel:${phone}`);
+
+    // New posts arrive live via Reverb → auto-refresh the list (no banner, no tap).
+    // The match check keeps it to posts relevant to the current filter; React
+    // Query de-dupes rapid refetches.
+    const refetchRides = ridesQuery.refetch;
+    const onLiveNewPost = useCallback((payload) => {
+        const f = appliedFilters;
+        if (f.from_city_id && payload?.from_city_id !== f.from_city_id) return;
+        if (f.to_city_id && payload?.to_city_id !== f.to_city_id) return;
+        if (f.date && payload?.date !== f.date) return;
+        refetchRides();
+    }, [appliedFilters, refetchRides]);
+    useRidesRealtime(currentRide ? undefined : onLiveNewPost);
 
     const [bookingModal, setBookingModal]   = useState(null);
     const [seatsRequested, setSeatsRequested] = useState(1);
@@ -107,6 +159,45 @@ const AvailableRidesScreen = ({ navigation }) => {
     };
 
     const hasFilters = !!(fromCity || toCity || dateObj);
+
+    // ── "Notify me" ride alert for the selected route (+ optional date) ───────
+    const alertsQuery = useRideAlerts();
+    const alerts = alertsQuery.data || [];
+    const selectedDate = dateObj ? ymd(dateObj) : null;
+    const matchingAlert = alerts.find(a =>
+        a.from_city_id === fromCity?.id &&
+        a.to_city_id === toCity?.id &&
+        (a.alert_date || null) === selectedDate
+    );
+    const canAlert = !!(fromCity && toCity);
+    // Optimistic toggle: flip instantly on tap, reconcile with the server result.
+    const [pendingAlert, setPendingAlert] = useState(null);
+    const alertOn = pendingAlert !== null ? pendingAlert : !!matchingAlert;
+
+    const createAlert = useCreateRideAlert({
+        onSuccess: () => Toast.show({ type: 'success', text1: 'Alert on', text2: 'We’ll notify you when a matching ride is posted.' }),
+        onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
+        onSettled: () => setPendingAlert(null),
+    });
+    const deleteAlert = useDeleteRideAlert({
+        onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
+        onSettled: () => setPendingAlert(null),
+    });
+
+    const toggleAlert = (val) => {
+        if (!canAlert) {
+            Toast.show({ type: 'info', text1: 'Select From and To cities to get alerts' });
+            return;
+        }
+        setPendingAlert(val);
+        if (val) {
+            createAlert.mutate({ from_city_id: fromCity.id, to_city_id: toCity.id, alert_date: selectedDate });
+        } else if (matchingAlert) {
+            deleteAlert.mutate(matchingAlert.id);
+        } else {
+            setPendingAlert(null);
+        }
+    };
 
     const openBooking = (item) => {
         setSeatsRequested(1);
@@ -204,6 +295,27 @@ const AvailableRidesScreen = ({ navigation }) => {
                 {dateObj
                     ? <TouchableOpacity onPress={() => setDateObj(null)}><Icon name="close-circle" size={16} color="#C4C9CF" /></TouchableOpacity>
                     : <Icon name="chevron-down" size={18} color="#9E9E9E" />}
+            </TouchableOpacity>
+
+            <View style={styles.searchDivider} />
+
+            {/* Notify me — alert when a ride matches this route (+ date) */}
+            <TouchableOpacity
+                style={styles.notifyRow}
+                activeOpacity={canAlert ? 1 : 0.6}
+                onPress={() => { if (!canAlert) Toast.show({ type: 'info', text1: 'Select From and To cities to get alerts' }); }}
+            >
+                <Icon name="bell-ring-outline" size={18} color={canAlert ? '#07163B' : '#C4C9CF'} />
+                <Text style={[styles.notifyText, !canAlert && styles.searchPlaceholder]}>
+                    {alertOn ? 'You’ll be notified for this route' : 'Notify me when a ride matches'}
+                </Text>
+                <Switch
+                    value={alertOn}
+                    onValueChange={toggleAlert}
+                    disabled={!canAlert}
+                    trackColor={{ true: '#FFD400', false: '#E0E0E0' }}
+                    thumbColor="#FFFFFF"
+                />
             </TouchableOpacity>
 
             <View style={styles.searchDivider} />
@@ -348,45 +460,152 @@ const AvailableRidesScreen = ({ navigation }) => {
         );
     };
 
+    // ── Rider's active-ride view (replaces browse while a ride is in progress) ─
+    const renderActiveRide = () => {
+        const b = currentRide;
+        const ride = b.ride || {};
+        const driver = ride.driver || {};
+        const driverName = [driver.first_name, driver.last_name].filter(Boolean).join(' ') || 'Driver';
+
+        const isAccepted  = b.status === 'accepted';
+        const isStarted   = isAccepted && ride.status === 'in_progress';
+
+        let icon = 'clock-outline', color = '#D97706', bg = '#FFF7ED';
+        let label = 'Waiting for driver', sub = 'Your request has been sent. You’ll be confirmed once the driver accepts.';
+        if (isAccepted && !isStarted) { icon = 'check-circle-outline'; color = '#109F2A'; bg = '#E8F8EE'; label = 'Booking confirmed'; sub = 'The driver accepted. You’ll see here when the ride starts.'; }
+        if (isStarted)   { icon = 'steering';        color = '#1D6AFF'; bg = '#EEF4FF'; label = 'Ride started'; sub = 'Your driver has started the ride.'; }
+
+        return (
+            <View style={styles.activeWrap}>
+                <View style={styles.rideCard}>
+                    <View style={[styles.activeStatusPill, { backgroundColor: bg }]}>
+                        <Icon name={icon} size={15} color={color} />
+                        <Text style={[styles.activeStatusText, { color }]}>{label}</Text>
+                    </View>
+                    <Text style={styles.activeSub}>{sub}</Text>
+
+                    <View style={styles.routeRow}>
+                        <View style={styles.routeDots}>
+                            <View style={styles.dotGreen} />
+                            <View style={styles.routeLine} />
+                            <View style={styles.dotNavy} />
+                        </View>
+                        <View style={styles.routeTexts}>
+                            <Text style={styles.routeFrom} numberOfLines={1}>{ride.from_city || '—'}</Text>
+                            <Text style={styles.routeTo} numberOfLines={1}>{ride.to_city || '—'}</Text>
+                        </View>
+                    </View>
+
+                    <View style={styles.metaRow}>
+                        <Icon name="calendar-clock" size={13} color="#5D5F62" />
+                        <Text style={styles.metaText}>{fmtDate(ride.departure_at)}</Text>
+                    </View>
+                    <View style={styles.metaRow}>
+                        <Icon name="seat-passenger" size={13} color="#5D5F62" />
+                        <Text style={styles.metaText}>
+                            {b.seats_booked} seat{b.seats_booked > 1 ? 's' : ''} · Rs {Number(b.total_amount).toLocaleString()}
+                        </Text>
+                    </View>
+
+                    {(isAccepted || isStarted) && (
+                        <View style={styles.activeDriverRow}>
+                            <View style={styles.activeAvatar}>
+                                <Text style={styles.activeInitial}>{(driver.first_name?.[0] || 'D').toUpperCase()}</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.activeDriverName}>{driverName}</Text>
+                                <Text style={styles.activeDriverSub}>Your driver</Text>
+                            </View>
+                            <TouchableOpacity style={styles.activeCallBtn} onPress={() => callDriver(driver.phone_number)}>
+                                <Icon name="phone" size={16} color="#FFFFFF" />
+                            </TouchableOpacity>
+                        </View>
+                    )}
+
+                    <TouchableOpacity
+                        style={styles.activeCancelBtn}
+                        onPress={() => confirmCancelRide(b)}
+                        disabled={cancelBooking.isPending}
+                    >
+                        <Icon name="close-circle-outline" size={16} color="#D83F54" />
+                        <Text style={styles.activeCancelText}>Cancel Booking</Text>
+                    </TouchableOpacity>
+                </View>
+
+                <Text style={styles.activeHint}>You can book a new ride once this one is complete.</Text>
+            </View>
+        );
+    };
+
     // ── Render ────────────────────────────────────────────────────────────────
 
     return (
         <View style={styles.root}>
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
-            {/* Static header — title only */}
+            {/* Static header */}
             <View style={styles.header}>
+                {navigation.canGoBack() ? (
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack}>
+                        <Icon name="arrow-left" size={24} color="#07163B" />
+                    </TouchableOpacity>
+                ) : <View style={styles.headerBack} />}
                 <Text style={styles.headerTitle}>Available Rides</Text>
                 <TouchableOpacity style={styles.filterBtn}>
                     <Icon name="tune-variant" size={20} color="#07163B" />
                 </TouchableOpacity>
             </View>
 
-            {/* FlatList: search card scrolls as first item, then ride cards */}
-            <FlatList
-                data={rides}
-                keyExtractor={item => String(item.id)}
-                renderItem={renderRide}
-                ListHeaderComponent={<ListHeader />}
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={styles.list}
-                keyboardShouldPersistTaps="handled"
-                refreshing={ridesQuery.isFetching}
-                onRefresh={ridesQuery.refetch}
-                ListEmptyComponent={
-                    ridesQuery.isLoading ? (
-                        <ActivityIndicator color="#FFD400" style={{ marginTop: 40 }} />
-                    ) : (
-                        <View style={styles.emptyState}>
-                            <Icon name="car-off" size={46} color="#DDDDDD" />
-                            <Text style={styles.emptyTitle}>No rides available</Text>
-                            <Text style={styles.emptySub}>Check back later or adjust your search.</Text>
+            {currentRide ? (
+                renderActiveRide()
+            ) : (
+                <>
+                    {/* Pending requests hint — rider may have several out at once */}
+                    {pendingCount > 0 && (
+                        <View style={styles.pendingBar}>
+                            <Icon name="clock-outline" size={14} color="#D97706" />
+                            <Text style={styles.pendingBarText}>
+                                {pendingCount} request{pendingCount > 1 ? 's' : ''} sent · waiting for a driver to accept
+                            </Text>
                         </View>
-                    )
-                }
-            />
+                    )}
 
-
+                    {/* FlatList: search card scrolls as first item, then ride cards */}
+                    <FlatList
+                        data={rides}
+                        keyExtractor={item => String(item.id)}
+                        renderItem={renderRide}
+                        ListHeaderComponent={<ListHeader />}
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={styles.list}
+                        keyboardShouldPersistTaps="handled"
+                        refreshing={ridesQuery.isRefetching}
+                        onRefresh={ridesQuery.refetch}
+                        onEndReachedThreshold={0.5}
+                        onEndReached={() => {
+                            if (ridesQuery.hasNextPage && !ridesQuery.isFetchingNextPage) {
+                                ridesQuery.fetchNextPage();
+                            }
+                        }}
+                        ListFooterComponent={
+                            ridesQuery.isFetchingNextPage
+                                ? <ActivityIndicator color="#FFD400" style={{ marginVertical: 20 }} />
+                                : null
+                        }
+                        ListEmptyComponent={
+                            ridesQuery.isLoading ? (
+                                <ActivityIndicator color="#FFD400" style={{ marginTop: 40 }} />
+                            ) : (
+                                <View style={styles.emptyState}>
+                                    <Icon name="car-off" size={46} color="#DDDDDD" />
+                                    <Text style={styles.emptyTitle}>No rides available</Text>
+                                    <Text style={styles.emptySub}>Check back later or adjust your search.</Text>
+                                </View>
+                            )
+                        }
+                    />
+                </>
+            )}
 
             {/* ── Booking Bottom Sheet ──────────────────────────────────────── */}
             <Modal visible={!!bookingModal} transparent animationType="slide">
@@ -573,8 +792,47 @@ const styles = StyleSheet.create({
         borderWidth: 1, borderColor: '#EAEDEE',
         alignItems: 'center', justifyContent: 'center',
     },
+    headerBack: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
 
     list: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 40 },
+
+    // ── Active ride view ────────────────────────────────────────────────────
+    activeWrap: { padding: 16 },
+    activeStatusPill: {
+        flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+        borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginBottom: 10,
+    },
+    activeStatusText: { fontSize: 13, fontFamily: Fonts.semiBold },
+    activeSub: { fontSize: 13, fontFamily: Fonts.regular, color: '#5D5F62', lineHeight: 19, marginBottom: 14 },
+    activeDriverRow: {
+        flexDirection: 'row', alignItems: 'center', gap: 12,
+        backgroundColor: '#F8FBF9', borderRadius: 12, padding: 12, marginTop: 6, marginBottom: 4,
+        borderWidth: 1, borderColor: '#E8F8EE',
+    },
+    activeAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#FFD400', alignItems: 'center', justifyContent: 'center' },
+    activeInitial: { fontSize: 17, fontFamily: Fonts.bold, color: '#07163B' },
+    activeDriverName: { fontSize: 14, fontFamily: Fonts.semiBold, color: '#07163B' },
+    activeDriverSub: { fontSize: 12, fontFamily: Fonts.regular, color: '#109F2A', marginTop: 1 },
+    activeCallBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#109F2A', alignItems: 'center', justifyContent: 'center' },
+    activeActions: { flexDirection: 'row', gap: 10, marginTop: 12 },
+    activeSkipBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, borderWidth: 1.5, borderColor: '#EAEDEE', alignItems: 'center' },
+    activeSkipText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#5D5F62' },
+    activePrimaryBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 10, backgroundColor: '#FFD400' },
+    activePrimaryText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#111111' },
+    activeCancelBtn: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+        paddingVertical: 13, borderRadius: 10, borderWidth: 1.5, borderColor: '#D83F54',
+        backgroundColor: '#FFF0F2', marginTop: 12,
+    },
+    activeCancelText: { fontSize: 14, fontFamily: Fonts.semiBold, color: '#D83F54' },
+    activeHint: { fontSize: 12, fontFamily: Fonts.regular, color: '#9E9E9E', textAlign: 'center', marginTop: 14 },
+    pendingBar: {
+        flexDirection: 'row', alignItems: 'center', gap: 7,
+        backgroundColor: '#FFF7ED', borderColor: '#FCD9A8', borderWidth: 1,
+        marginHorizontal: 16, marginTop: 12, borderRadius: 12,
+        paddingHorizontal: 14, paddingVertical: 10,
+    },
+    pendingBarText: { flex: 1, fontSize: 12, fontFamily: Fonts.medium, color: '#92600B' },
 
     emptyState: { alignItems: 'center', paddingTop: 50, gap: 8 },
     emptyTitle: { fontSize: 15, fontFamily: Fonts.semiBold, color: '#AAAAAA' },

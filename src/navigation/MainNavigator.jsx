@@ -3,6 +3,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useApp } from '../context/AppContext';
+import { useUnreadCount } from '../hooks/useNotifications';
+import { useUserRealtime, useRealtimeConnected } from '../hooks/useRealtime';
 import HomeScreen from '../screens/HomeScreen';
 import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import MarketplaceScreen from '../screens/buysell/MarketplaceScreen';
@@ -18,6 +20,14 @@ import PostRideScreen from "../screens/driver/PostRideScreen";
 const Tab = createBottomTabNavigator();
 
 const CustomTabBar = ({ state, descriptors, navigation }) => {
+    const { role } = useApp();
+    const isDriver = role === 'driver';
+    // Live via Reverb; poll only as a fallback if the socket drops.
+    const connected = useRealtimeConnected();
+    const { data: unread = 0 } = useUnreadCount({
+        refetchInterval: connected ? false : 30000,
+        refetchIntervalInBackground: false,
+    });
     return (
         <View style={styles.tabBar}>
             {state.routes.map((route, index) => {
@@ -46,18 +56,29 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 };
 
                 if (isCenter) {
+                    // Driver → post a ride (+). Rider → find a ride (search).
+                    const goCenter = () => (isDriver ? navigation.navigate('Post') : navigation.navigate('AvailableRides'));
                     return (
-                        <TouchableOpacity key={route.key} style={styles.centerBtn} onPress={onPress} activeOpacity={0.85}>
+                        <TouchableOpacity key={route.key} style={styles.centerBtn} onPress={goCenter} activeOpacity={0.85}>
                             <View style={styles.centerCircle}>
-                                <Icon name="plus" size={28} color="#1D3461" />
+                                <Icon name={isDriver ? 'plus' : 'magnify'} size={28} color="#1D3461" />
                             </View>
                         </TouchableOpacity>
                     );
                 }
 
+                const showBadge = route.name === 'Notifications' && unread > 0;
+
                 return (
                     <TouchableOpacity key={route.key} style={styles.tabItem} onPress={onPress} activeOpacity={0.85}>
-                        <Icon name={iconMap[route.name]} size={22} color={isFocused ? '#FFD400' : '#8A8A8A'} />
+                        <View>
+                            <Icon name={iconMap[route.name]} size={22} color={isFocused ? '#FFD400' : '#8A8A8A'} />
+                            {showBadge && (
+                                <View style={styles.tabBadge}>
+                                    <Text style={styles.tabBadgeText}>{unread > 99 ? '99+' : unread}</Text>
+                                </View>
+                            )}
+                        </View>
                         <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>
                             {labelMap[route.name]}
                         </Text>
@@ -71,6 +92,10 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 const MainNavigator = () => {
     const { role } = useApp();
     const RidesScreen = role === 'driver' ? RideRequestsScreen : MyBookingsScreen;
+
+    // Live updates for the whole authenticated session (booking status,
+    // notifications, ride alerts) over the user's private WebSocket channel.
+    useUserRealtime();
 
     return (
         <Tab.Navigator tabBar={props => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
@@ -103,6 +128,23 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         gap: 3,
+    },
+    tabBadge: {
+        position: 'absolute',
+        top: -6,
+        right: -10,
+        minWidth: 16,
+        height: 16,
+        borderRadius: 8,
+        backgroundColor: '#D83F54',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 4,
+    },
+    tabBadgeText: {
+        fontSize: 9,
+        fontFamily: 'Poppins-Bold',
+        color: '#FFFFFF',
     },
     tabLabel: {
         fontSize: 10,

@@ -1,17 +1,18 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity,
     StatusBar, Modal, ActivityIndicator, PanResponder, Alert, Linking,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
 import Sidebar from '../../components/Sidebar';
 import BottomSheet from '../../components/BottomSheet';
 import ReviewSheet from '../../components/ReviewSheet';
-import useRidePosts, { useCancelRidePost } from '../../hooks/useRidePosts';
+import useRidePosts, { useCancelRidePost, useRideLifecycle } from '../../hooks/useRidePosts';
 import { useDriverBookings, useBookingActions } from '../../hooks/useDriverBookings';
-import { useCompleteBooking, useRateBooking } from '../../hooks/useReview';
+import { useRateBooking } from '../../hooks/useReview';
 
 // Format "2026-12-01T08:00:00.000000Z" → "01 Dec 2026 · 08:00"
 const fmtDeparture = (iso) => {
@@ -19,7 +20,7 @@ const fmtDeparture = (iso) => {
     const d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleString('en-GB', {
-        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true,
     }).replace(',', ' ·');
 };
 
@@ -32,8 +33,6 @@ const TAB_STATUS = {
     Accepted: ['accepted'],
     Declined: ['rejected', 'cancelled'],
 };
-
-const isDue = (iso) => iso && new Date(iso).getTime() <= Date.now();
 
 // "2026-06-18T..." → "3h ago" / "2d ago"
 const timeAgo = (iso) => {
@@ -72,7 +71,9 @@ const RideRequestsScreen = ({ navigation }) => {
     // Driver's own posted rides (real API)
     const postsQuery = useRidePosts();
     const postedRides = postsQuery.data?.ride_posts || [];
-    const activePost = postedRides[0] || null;
+    // The post the driver is currently managing — ignore closed ones so a finished
+    // or cancelled ride never blocks posting again.
+    const activePost = postedRides.find(p => ['active', 'full', 'in_progress'].includes(p.status)) || null;
 
     // Expandable posted-ride sheet
     const [postSheetVisible, setPostSheetVisible] = useState(false);
@@ -109,24 +110,53 @@ const RideRequestsScreen = ({ navigation }) => {
         })
     ).current;
 
-    // Bookings received on the driver's posts (all statuses, filtered per tab)
-    const bookingsQuery = useDriverBookings();
+    // Bookings on the driver's CURRENT active post only — so past rides' declined/
+    // cancelled requests don't clutter it (the same rider may re-request next time).
+    const bookingsQuery = useDriverBookings(
+        { ride_post_id: activePost?.id },
+        { enabled: !!activePost },
+    );
     const allBookings = bookingsQuery.data || [];
     const { accept, reject } = useBookingActions();
 
-    const [reviewItem, setReviewItem] = useState(null);
+    // Show the freshest posts + requests whenever this screen regains focus
+    // (e.g. right after the driver posts a new ride).
+    const refetchPosts = postsQuery.refetch;
+    const refetchBookings = bookingsQuery.refetch;
+    useFocusEffect(
+        useCallback(() => {
+            refetchPosts();
+            refetchBookings();
+        }, [refetchPosts, refetchBookings])
+    );
 
-    const completeBooking = useCompleteBooking({
+    // Review prompt queue — after the driver ends a ride we ask them to rate each
+    // accepted rider one-by-one (skippable).
+    const [reviewQueue, setReviewQueue] = useState([]);
+    const reviewItem = reviewQueue[0] || null;
+    const advanceReview = () => setReviewQueue(q => q.slice(1));
+
+    const lifecycle = useRideLifecycle({
+        onStartSuccess: () => Toast.show({ type: 'success', text1: 'Ride started', text2: 'Riders can no longer cancel.' }),
+        onEndSuccess: () => Toast.show({ type: 'success', text1: 'Ride completed' }),
         onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
     });
 
     const rateBooking = useRateBooking({
-        onSuccess: () => { setReviewItem(null); Toast.show({ type: 'success', text1: 'Thanks for your review!' }); },
+        onSuccess: () => advanceReview(),
         onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
     });
 
-    const handleComplete = (item) =>
-        completeBooking.mutate(item.id, { onSuccess: () => setReviewItem(item) });
+    const startRide = () => activePost && lifecycle.start.mutate(activePost.id);
+
+    const endRide = () => {
+        if (!activePost) return;
+        // Capture accepted riders before the lists refresh, so we can queue reviews.
+        const accepted = allBookings.filter(b => b.status === 'accepted').map(mapBooking);
+        lifecycle.end.mutate(activePost.id, {
+            onSuccess: () => { setPostSheetVisible(false); setReviewQueue(accepted); },
+        });
+    };
 
     const callRider = (phone) => phone && Linking.openURL(`tel:${phone}`);
 
@@ -172,7 +202,6 @@ const RideRequestsScreen = ({ navigation }) => {
         const isPending = item.status === 'pending';
         const isAccepted = item.status === 'accepted';
         const isDeclined = item.status === 'rejected' || item.status === 'cancelled';
-        const canComplete = isAccepted && isDue(item.departureAt);
 
         return (
             <View style={styles.card}>
@@ -259,15 +288,6 @@ const RideRequestsScreen = ({ navigation }) => {
                                 <Icon name="phone" size={15} color="#FFFFFF" />
                                 <Text style={styles.callBtnText}>Call</Text>
                             </TouchableOpacity>
-                            {canComplete && (
-                                <TouchableOpacity
-                                    style={styles.acceptBtn}
-                                    onPress={() => handleComplete(item)}
-                                    disabled={completeBooking.isPending}
-                                >
-                                    <Text style={styles.acceptBtnText}>Complete</Text>
-                                </TouchableOpacity>
-                            )}
                         </>
                     )}
                 </View>
@@ -402,6 +422,33 @@ const RideRequestsScreen = ({ navigation }) => {
                         </View>
                         <Text style={styles.peekDate}>{fmtDeparture(activePost.departure_at)}</Text>
                     </TouchableOpacity>
+
+                    {/* Quick Start / End right on the bar */}
+                    {activePost.status === 'in_progress' ? (
+                        <TouchableOpacity
+                            style={styles.peekActionBtn}
+                            onPress={endRide}
+                            disabled={lifecycle.end.isPending}
+                            activeOpacity={0.85}
+                        >
+                            <Icon name="flag-checkered" size={16} color="#111111" />
+                            <Text style={styles.peekActionText}>
+                                {lifecycle.end.isPending ? 'Ending…' : 'End Ride'}
+                            </Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <TouchableOpacity
+                            style={styles.peekActionBtn}
+                            onPress={startRide}
+                            disabled={lifecycle.start.isPending}
+                            activeOpacity={0.85}
+                        >
+                            <Icon name="play-circle-outline" size={16} color="#111111" />
+                            <Text style={styles.peekActionText}>
+                                {lifecycle.start.isPending ? 'Starting…' : 'Start Ride'}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
                 </View>
             )}
 
@@ -466,18 +513,45 @@ const RideRequestsScreen = ({ navigation }) => {
                             </View>
                         )}
 
-                        {/* Cancel */}
-                        <TouchableOpacity
-                            style={styles.cancelRideBtn}
-                            onPress={handleCancelRide}
-                            disabled={cancelPost.isPending}
-                            activeOpacity={0.85}
-                        >
-                            <Icon name="close-circle-outline" size={18} color="#D83F54" />
-                            <Text style={styles.cancelRideText}>
-                                {cancelPost.isPending ? 'Cancelling…' : 'Cancel Ride'}
-                            </Text>
-                        </TouchableOpacity>
+                        {/* Trip lifecycle */}
+                        {activePost.status === 'in_progress' ? (
+                            <TouchableOpacity
+                                style={styles.endRideBtn}
+                                onPress={endRide}
+                                disabled={lifecycle.end.isPending}
+                                activeOpacity={0.85}
+                            >
+                                <Icon name="flag-checkered" size={18} color="#111111" />
+                                <Text style={styles.endRideText}>
+                                    {lifecycle.end.isPending ? 'Ending…' : 'End Ride'}
+                                </Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <>
+                                <TouchableOpacity
+                                    style={styles.startRideBtn}
+                                    onPress={startRide}
+                                    disabled={lifecycle.start.isPending}
+                                    activeOpacity={0.85}
+                                >
+                                    <Icon name="play-circle-outline" size={18} color="#111111" />
+                                    <Text style={styles.startRideText}>
+                                        {lifecycle.start.isPending ? 'Starting…' : 'Start Ride'}
+                                    </Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={styles.cancelRideBtn}
+                                    onPress={handleCancelRide}
+                                    disabled={cancelPost.isPending}
+                                    activeOpacity={0.85}
+                                >
+                                    <Icon name="close-circle-outline" size={18} color="#D83F54" />
+                                    <Text style={styles.cancelRideText}>
+                                        {cancelPost.isPending ? 'Cancelling…' : 'Cancel Ride'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </>
+                        )}
                     </View>
                 )}
             </BottomSheet>
@@ -543,7 +617,7 @@ const RideRequestsScreen = ({ navigation }) => {
 
             <ReviewSheet
                 visible={!!reviewItem}
-                onClose={() => setReviewItem(null)}
+                onClose={advanceReview}
                 submitting={rateBooking.isPending}
                 title="Rate the rider"
                 subtitle={reviewItem?.name}
@@ -812,6 +886,11 @@ const styles = StyleSheet.create({
     },
     peekRoute: { flex: 1, fontSize: 15, fontFamily: Fonts.semiBold, color: '#202223' },
     peekDate: { fontSize: 12, fontFamily: Fonts.regular, color: '#5D5F62', marginTop: 4 },
+    peekActionBtn: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+        backgroundColor: '#FFD400', borderRadius: 10, paddingVertical: 12, marginTop: 12,
+    },
+    peekActionText: { fontSize: 14, fontFamily: Fonts.semiBold, color: '#111111' },
     postedArrow: { fontFamily: Fonts.regular, color: '#9E9E9E' },
 
     postedEmptyText: { fontSize: 13, fontFamily: Fonts.regular, color: '#9E9E9E' },
@@ -854,6 +933,16 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF0F2',
     },
     cancelRideText: { fontSize: 15, fontFamily: Fonts.semiBold, color: '#D83F54' },
+    startRideBtn: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+        paddingVertical: 15, borderRadius: 12, backgroundColor: '#FFD400', marginBottom: 12,
+    },
+    startRideText: { fontSize: 15, fontFamily: Fonts.semiBold, color: '#111111' },
+    endRideBtn: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+        paddingVertical: 15, borderRadius: 12, backgroundColor: '#FFD400',
+    },
+    endRideText: { fontSize: 15, fontFamily: Fonts.semiBold, color: '#111111' },
 
     // Modal
     modalOverlay: {

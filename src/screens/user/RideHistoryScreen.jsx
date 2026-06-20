@@ -8,15 +8,14 @@ import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
 import ReviewSheet from '../../components/ReviewSheet';
 import useUserStore from '../../store/userStore';
-import { useMyBookings } from '../../hooks/useMyBookings';
-import { useDriverBookings } from '../../hooks/useDriverBookings';
+import { useRideHistory } from '../../hooks/useRideHistory';
 import { useRateBooking } from '../../hooks/useReview';
 
 const fmtDate = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
     return isNaN(d.getTime()) ? iso
-        : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
 const RideHistoryScreen = ({ navigation }) => {
@@ -24,11 +23,9 @@ const RideHistoryScreen = ({ navigation }) => {
     const isDriver = user?.user_type === 'driver';
     const [reviewItem, setReviewItem] = useState(null);
 
-    // Only the relevant query runs (enabled by role)
-    const driverQ = useDriverBookings('completed', { enabled: isDriver });
-    const riderQ  = useMyBookings('completed', { enabled: !isDriver });
-    const query = isDriver ? driverQ : riderQ;
-    const rides = query.data || [];
+    // Completed rides with infinite scroll
+    const query = useRideHistory(isDriver);
+    const rides = (query.data?.pages || []).flatMap(p => p.bookings || []);
 
     const rate = useRateBooking({
         onSuccess: () => { setReviewItem(null); Toast.show({ type: 'success', text1: 'Thanks for your review!' }); },
@@ -42,7 +39,11 @@ const RideHistoryScreen = ({ navigation }) => {
         const otherName = [other?.first_name, other?.last_name].filter(Boolean).join(' ') || (isDriver ? 'Rider' : 'Driver');
 
         return (
-            <View style={styles.card}>
+            <TouchableOpacity
+                style={styles.card}
+                activeOpacity={0.85}
+                onPress={() => ride.id && navigation.navigate('RideDetail', { offer: { id: ride.id } })}
+            >
                 <View style={styles.topRow}>
                     <Text style={styles.route} numberOfLines={1}>
                         {ride.from_city}<Text style={styles.arrow}>  →  </Text>{ride.to_city}
@@ -76,7 +77,7 @@ const RideHistoryScreen = ({ navigation }) => {
                         <Text style={styles.reviewText}>Leave a Review</Text>
                     </TouchableOpacity>
                 )}
-            </View>
+            </TouchableOpacity>
         );
     };
 
@@ -98,8 +99,17 @@ const RideHistoryScreen = ({ navigation }) => {
                 renderItem={renderCard}
                 contentContainerStyle={styles.list}
                 showsVerticalScrollIndicator={false}
-                refreshing={query.isFetching}
+                refreshing={query.isRefetching}
                 onRefresh={query.refetch}
+                onEndReachedThreshold={0.5}
+                onEndReached={() => {
+                    if (query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage();
+                }}
+                ListFooterComponent={
+                    query.isFetchingNextPage
+                        ? <ActivityIndicator color="#FFD400" style={{ marginVertical: 16 }} />
+                        : null
+                }
                 ListEmptyComponent={
                     query.isLoading
                         ? <ActivityIndicator color="#FFD400" style={{ marginTop: 50 }} />

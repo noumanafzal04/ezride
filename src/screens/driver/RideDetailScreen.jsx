@@ -2,14 +2,42 @@ import React, { useState, useRef } from 'react';
 import {
     View, Text, StyleSheet, ScrollView,
     TouchableOpacity, StatusBar, FlatList,
-    Dimensions, Image, Linking,
+    Dimensions, Image, Linking, ActivityIndicator, Modal, TextInput,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-toast-message';
+import { useQueryClient } from '@tanstack/react-query';
 import Fonts from '../../constants/fonts';
 import config from '../../config';
-import useRideDetail from '../../hooks/useRideDetail';
+import useRideDetail, { useDriverSummary, useDriverReviews, useDriverTrips } from '../../hooks/useRideDetail';
+import { useMyBookings } from '../../hooks/useMyBookings';
+import { useBookSeat } from '../../hooks/useAvailableRides';
 
 const { width } = Dimensions.get('window');
+
+// Derive the rider's current stage on this ride (for the status section)
+const RIDE_STEPS = ['Requested', 'Accepted', 'Started', 'Completed'];
+const deriveStatus = (booking, rideStatus) => {
+    if (booking) {
+        switch (booking.status) {
+            case 'pending':   return { step: 0, label: 'Request pending', color: '#D97706', bg: '#FFF7ED' };
+            case 'accepted':  return rideStatus === 'in_progress'
+                ? { step: 2, label: 'Ride in progress', color: '#1D6AFF', bg: '#EEF4FF' }
+                : { step: 1, label: 'Booking confirmed', color: '#109F2A', bg: '#E8F8EE' };
+            case 'completed': return { step: 3, label: 'Ride completed', color: '#1D6AFF', bg: '#EEF4FF' };
+            case 'rejected':  return { step: -1, label: 'Request declined', color: '#D83F54', bg: '#FFF0F2' };
+            case 'cancelled': return { step: -1, label: 'Booking cancelled', color: '#5D5F62', bg: '#F1F2F4' };
+            default: break;
+        }
+    }
+    switch (rideStatus) {
+        case 'completed':   return { step: 3, label: 'Ride completed', color: '#1D6AFF', bg: '#EEF4FF' };
+        case 'in_progress': return { step: 2, label: 'Ride in progress', color: '#1D6AFF', bg: '#EEF4FF' };
+        case 'full':        return { step: 1, label: 'Fully booked', color: '#D97706', bg: '#FFF7ED' };
+        case 'active':      return { step: 0, label: 'Open for booking', color: '#109F2A', bg: '#E8F8EE' };
+        default:            return null;
+    }
+};
 
 // Build a full file URL from a storage path
 const FILE_BASE = config.BASE_URL.replace(/\/api\/v1\/?$/, '/');
@@ -22,10 +50,12 @@ const mapDetail = (p) => {
     const v = d.vehicle || {};
     const isPrivate = p.post_type === 'private';
     const fmt = p.departure_at
-        ? new Date(p.departure_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        ? new Date(p.departure_at).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true })
         : '';
     return {
         id: p.id,
+        status: p.status,
+        driverId: d.id,
         name: `${d.first_name || ''} ${d.last_name || ''}`.trim() || 'Driver',
         phone: d.phone_number,
         pricePerSeat: Number(p.price_per_seat) || 0,
@@ -34,6 +64,11 @@ const mapDetail = (p) => {
         to: [p.to?.city?.name, p.to?.address].filter(Boolean).join(' · '),
         date: fmt,
         vehicle: [v.model?.make, v.model?.name].filter(Boolean).join(' '),
+        color: v.color,
+        plate: v.registration_number,
+        capacity: v.seating_capacity,
+        ac: v.has_air_conditioner,
+        year: v.manufacture_year,
         type: isPrivate ? 'Private' : 'Shared',
         carImage: fileUrl(v.vehicle_image_path) || undefined,
     };
@@ -49,24 +84,22 @@ const CAR_IMAGES = [
 
 const TABS = ['Reviews', 'Vehicle Info', 'Recent Trips'];
 
-const REVIEWS = [
-    {
-        id: '1',
-        name: 'Kubra Malik',
-        rating: 4.0,
-        time: '2 weeks ago',
-        text: 'Great experience! The driver was super friendly and the ride was smooth. Would definitely use again!',
-        emojis: ['👍', '😊'],
-    },
-    {
-        id: '2',
-        name: 'Bilal Hassan',
-        rating: 5.0,
-        time: '1 month ago',
-        text: 'Punctual, clean car, and very professional. Highly recommended for long routes.',
-        emojis: ['⭐', '👌'],
-    },
-];
+const timeAgo = (iso) => {
+    if (!iso) return '';
+    const diff = Date.now() - new Date(iso).getTime();
+    if (isNaN(diff)) return '';
+    const d = Math.floor(diff / 86400000);
+    if (d < 1) return 'today';
+    if (d < 7) return `${d}d ago`;
+    if (d < 30) return `${Math.floor(d / 7)}w ago`;
+    return `${Math.floor(d / 30)}mo ago`;
+};
+
+const tripDate = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
 
 const StarRating = ({ rating }) => (
     <View style={{ flexDirection: 'row', gap: 2 }}>
@@ -92,6 +125,51 @@ const RideDetailScreen = ({ navigation, route }) => {
     const { data: detail } = useRideDetail(passed?.id);
     const offer = detail ? { ...passed, ...mapDetail(detail) } : passed;
 
+    // The rider's live status on this ride (where they currently are in the flow)
+    const myBookings = useMyBookings().data || [];
+    const myBooking = myBookings.find(b => b.ride?.id === offer?.id);
+    const status = deriveStatus(myBooking, offer?.status);
+
+    // Only show "Book Seat" when the rider has no booking yet and the ride is open.
+    // Otherwise the bar shows just Message + Call (the Call button flexes to fill).
+    const canBook = !['pending', 'accepted', 'completed'].includes(myBooking?.status) && offer?.status === 'active';
+
+    // ── Booking sheet (works from any entry point, incl. a notification) ──────
+    const qc = useQueryClient();
+    const [bookingOpen, setBookingOpen] = useState(false);
+    const [seats, setSeats] = useState(1);
+    const [note, setNote] = useState('');
+    const maxSeats = Math.max(1, offer?.seatsLeft || 1);
+    const total = (offer?.pricePerSeat || 0) * seats;
+
+    const bookSeat = useBookSeat({
+        onSuccess: () => {
+            setBookingOpen(false);
+            qc.invalidateQueries({ queryKey: ['my-bookings'] });
+            qc.invalidateQueries({ queryKey: ['available-rides'] });
+            Toast.show({ type: 'success', text1: 'Request sent', text2: 'You’ll be notified when the driver responds.' });
+        },
+        onError: (err) => Toast.show({ type: 'error', text1: 'Booking failed', text2: err.response?.data?.message || 'Try again.' }),
+    });
+
+    const openBooking = () => { setSeats(1); setNote(''); setBookingOpen(true); };
+    const sendBooking = () => offer?.id && bookSeat.mutate({ ridePostId: offer.id, seats, note });
+
+    // Driver's real aggregates + paginated reviews/trips
+    const { data: summary } = useDriverSummary(offer?.driverId);
+    const reviewsQ = useDriverReviews(offer?.driverId);
+    const tripsQ = useDriverTrips(offer?.driverId, activeTab === 2);
+    const reviews = (reviewsQ.data?.pages || []).flatMap(p => p.reviews || []);
+    const recentTrips = (tripsQ.data?.pages || []).flatMap(p => p.trips || []);
+
+    // Load more of the active tab when the page scrolls near the bottom
+    const onScroll = (e) => {
+        const { layoutMeasurement, contentOffset, contentSize } = e.nativeEvent;
+        if (layoutMeasurement.height + contentOffset.y < contentSize.height - 400) return;
+        if (activeTab === 0 && reviewsQ.hasNextPage && !reviewsQ.isFetchingNextPage) reviewsQ.fetchNextPage();
+        if (activeTab === 2 && tripsQ.hasNextPage && !tripsQ.isFetchingNextPage) tripsQ.fetchNextPage();
+    };
+
     // Real vehicle photo if we have one, otherwise the placeholder gallery
     const images = offer?.carImage ? [offer.carImage] : CAR_IMAGES;
 
@@ -107,6 +185,8 @@ const RideDetailScreen = ({ navigation, route }) => {
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 110 }}
+                onScroll={onScroll}
+                scrollEventThrottle={200}
             >
                 {/* ── CAR IMAGE SWIPER ── */}
                 <View style={styles.imageSection}>
@@ -172,7 +252,7 @@ const RideDetailScreen = ({ navigation, route }) => {
                                 <View style={styles.ratingRow}>
                                     <Icon name="star" size={13} color="#F5A247" />
                                     <Text style={styles.ratingText}>
-                                        {offer?.rating || 4.9} · {offer?.rides || 120} Rides
+                                        {summary?.rating_avg ? Number(summary.rating_avg).toFixed(1) : 'New'} · {summary?.total_trips ?? 0} trips
                                     </Text>
                                 </View>
                                 <View style={styles.onlineRow}>
@@ -194,12 +274,12 @@ const RideDetailScreen = ({ navigation, route }) => {
                         </View>
                     </View>
 
-                    {/* ── STATS ── */}
+                    {/* ── STATS (real) ── */}
                     <View style={styles.statsRow}>
                         {[
-                            { value: '98.5%', label: 'Completion' },
-                            { value: '156',   label: 'Total Trips' },
-                            { value: '4.9',   label: 'Rating' },
+                            { value: String(summary?.reviews_count ?? 0), label: 'Reviews' },
+                            { value: String(summary?.total_trips ?? 0), label: 'Trips' },
+                            { value: summary?.rating_avg ? Number(summary.rating_avg).toFixed(1) : '—', label: 'Rating' },
                         ].map((stat, i, arr) => (
                             <React.Fragment key={stat.label}>
                                 <View style={styles.statItem}>
@@ -210,6 +290,45 @@ const RideDetailScreen = ({ navigation, route }) => {
                             </React.Fragment>
                         ))}
                     </View>
+
+                    {/* ── CURRENT STATUS ── */}
+                    {status && (
+                        <View style={styles.card}>
+                            <View style={styles.statusTop}>
+                                <Text style={styles.cardTitle}>Current Status</Text>
+                                <View style={[styles.statusPill, { backgroundColor: status.bg }]}>
+                                    <Text style={[styles.statusPillText, { color: status.color }]}>{status.label}</Text>
+                                </View>
+                            </View>
+
+                            {status.step >= 0 && (
+                                <>
+                                    <View style={styles.stepperRow}>
+                                        {RIDE_STEPS.map((s, i) => (
+                                            <React.Fragment key={s}>
+                                                {i > 0 && (
+                                                    <View style={[styles.stepConnector, i <= status.step && styles.stepConnectorActive]} />
+                                                )}
+                                                <View style={[styles.stepDot, i <= status.step && styles.stepDotActive]}>
+                                                    {i < status.step && <Icon name="check" size={11} color="#FFFFFF" />}
+                                                </View>
+                                            </React.Fragment>
+                                        ))}
+                                    </View>
+                                    <View style={styles.stepLabelsRow}>
+                                        {RIDE_STEPS.map((s, i) => (
+                                            <Text
+                                                key={s}
+                                                style={[styles.stepLabel, i <= status.step && styles.stepLabelActive]}
+                                            >
+                                                {s}
+                                            </Text>
+                                        ))}
+                                    </View>
+                                </>
+                            )}
+                        </View>
+                    )}
 
                     {/* ── ROUTE CARD ── */}
                     <View style={styles.card}>
@@ -256,23 +375,32 @@ const RideDetailScreen = ({ navigation, route }) => {
                         </View>
                     </View>
 
-                    {/* ── PRICE CARD ── */}
-                    <View style={styles.priceCard}>
-                        <View style={styles.priceRow}>
-                            <Text style={styles.priceLabel}>Your Request</Text>
-                            <Text style={styles.priceValue}>PKR 2,000</Text>
+                    {/* ── FARE ── */}
+                    {myBooking ? (
+                        <View style={styles.priceCard}>
+                            <View style={styles.priceRow}>
+                                <Text style={styles.priceLabel}>Per seat</Text>
+                                <Text style={styles.priceValue}>Rs {Number(myBooking.price_per_seat || 0).toLocaleString()}</Text>
+                            </View>
+                            <View style={styles.priceDivider} />
+                            <View style={styles.priceRow}>
+                                <Text style={styles.priceLabel}>Seats</Text>
+                                <Text style={styles.priceValue}>{myBooking.seats_booked}</Text>
+                            </View>
+                            <View style={styles.priceDivider} />
+                            <View style={styles.priceRow}>
+                                <Text style={styles.priceLabel}>Total fare</Text>
+                                <Text style={styles.priceOffered}>Rs {Number(myBooking.total_amount || 0).toLocaleString()}</Text>
+                            </View>
                         </View>
-                        <View style={styles.priceDivider} />
-                        <View style={styles.priceRow}>
-                            <Text style={styles.priceLabel}>Price Offered</Text>
-                            <Text style={styles.priceOffered}>PKR 2,450</Text>
+                    ) : (
+                        <View style={styles.priceCard}>
+                            <View style={styles.priceRow}>
+                                <Text style={styles.priceLabel}>Fare · per seat</Text>
+                                <Text style={styles.priceOffered}>Rs {Number(offer?.pricePerSeat || 0).toLocaleString()}</Text>
+                            </View>
                         </View>
-                        <View style={styles.priceDivider} />
-                        <View style={styles.priceRow}>
-                            <Text style={styles.priceLabel}>Per Seat</Text>
-                            <Text style={styles.priceSeat}>PKR 2,450</Text>
-                        </View>
-                    </View>
+                    )}
 
                     {/* ── TABS ── */}
                     <View style={styles.tabsRow}>
@@ -283,49 +411,56 @@ const RideDetailScreen = ({ navigation, route }) => {
                                 onPress={() => setActiveTab(i)}
                             >
                                 <Text style={[styles.tabText, activeTab === i && styles.tabTextActive]}>
-                                    {tab}{i === 0 ? ` (${REVIEWS.length})` : ''}
+                                    {tab}{i === 0 && reviews.length ? ` (${reviews.length})` : ''}
                                 </Text>
                             </TouchableOpacity>
                         ))}
                     </View>
 
-                    {/* ── REVIEWS ── */}
-                    {activeTab === 0 && REVIEWS.map(r => (
-                        <View key={r.id} style={styles.reviewCard}>
-                            <View style={styles.reviewTop}>
-                                <View style={styles.reviewAvatar}>
-                                    <Icon name="account" size={18} color="#CCCCCC" />
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                    <Text style={styles.reviewName}>{r.name}</Text>
-                                    <View style={styles.reviewStarsRow}>
-                                        <StarRating rating={r.rating} />
-                                        <Text style={styles.reviewTime}>{r.time}</Text>
-                                    </View>
-                                </View>
-                                <Text style={styles.reviewScore}>{r.rating}/5</Text>
+                    {/* ── REVIEWS (real, paginated) ── */}
+                    {activeTab === 0 && (
+                        reviewsQ.isLoading ? (
+                            <ActivityIndicator color="#FFD400" style={{ marginTop: 30 }} />
+                        ) : reviews.length === 0 ? (
+                            <View style={styles.emptyState}>
+                                <Icon name="star-outline" size={44} color="#DDDDDD" />
+                                <Text style={styles.emptyTitle}>No reviews yet</Text>
+                                <Text style={styles.emptyDesc}>Reviews from riders will appear here.</Text>
                             </View>
-                            <Text style={styles.reviewText}>{r.text}</Text>
-                            <View style={styles.reviewEmojis}>
-                                {r.emojis.map((e, i) => (
-                                    <View key={i} style={styles.emojiChip}>
-                                        <Text style={styles.emojiText}>{e}</Text>
+                        ) : (
+                            <>
+                                {reviews.map(r => (
+                                    <View key={r.id} style={styles.reviewCard}>
+                                        <View style={styles.reviewTop}>
+                                            <View style={styles.reviewAvatar}>
+                                                <Icon name="account" size={18} color="#CCCCCC" />
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.reviewName}>{r.from_name}</Text>
+                                                <View style={styles.reviewStarsRow}>
+                                                    <StarRating rating={r.rating} />
+                                                    <Text style={styles.reviewTime}>{timeAgo(r.created_at)}</Text>
+                                                </View>
+                                            </View>
+                                            <Text style={styles.reviewScore}>{r.rating}/5</Text>
+                                        </View>
+                                        {!!r.review && <Text style={styles.reviewText}>{r.review}</Text>}
                                     </View>
                                 ))}
-                            </View>
-                        </View>
-                    ))}
+                                {reviewsQ.isFetchingNextPage && <ActivityIndicator color="#FFD400" style={{ marginVertical: 14 }} />}
+                            </>
+                        )
+                    )}
 
-                    {/* ── VEHICLE INFO ── */}
+                    {/* ── VEHICLE INFO (real) ── */}
                     {activeTab === 1 && (
                         <View style={styles.card}>
                             {[
-                                { icon: 'car-outline',          label: 'Model',       value: 'Toyota Corolla Altis 2022' },
-                                { icon: 'palette-outline',      label: 'Color',       value: 'Pearl White'               },
-                                { icon: 'card-text-outline',    label: 'Plate No.',   value: 'LEA-20-5184'               },
-                                { icon: 'seat-passenger',       label: 'Capacity',    value: '4 Seats'                   },
-                                { icon: 'air-conditioner',      label: 'AC',          value: 'Available'                 },
-                                { icon: 'shield-check-outline', label: 'Verified',    value: 'Yes — docs checked'        },
+                                { icon: 'car-outline',       label: 'Model',            value: [offer?.vehicle, offer?.year].filter(Boolean).join(' ') || '—' },
+                                { icon: 'palette-outline',   label: 'Color',            value: offer?.color || '—' },
+                                { icon: 'card-text-outline', label: 'Plate No.',        value: offer?.plate || '—' },
+                                { icon: 'seat-passenger',    label: 'Capacity',         value: offer?.capacity ? `${offer.capacity} Seats` : '—' },
+                                { icon: 'air-conditioner',   label: 'Air Conditioning', value: offer?.ac ? 'Available' : 'Not available' },
                             ].map((row, i, arr) => (
                                 <React.Fragment key={row.label}>
                                     <View style={styles.vehicleRow}>
@@ -341,13 +476,42 @@ const RideDetailScreen = ({ navigation, route }) => {
                         </View>
                     )}
 
-                    {/* ── RECENT TRIPS ── */}
+                    {/* ── RECENT TRIPS (real, paginated) ── */}
                     {activeTab === 2 && (
-                        <View style={styles.emptyState}>
-                            <Icon name="map-marker-off-outline" size={44} color="#DDDDDD" />
-                            <Text style={styles.emptyTitle}>No recent trips</Text>
-                            <Text style={styles.emptyDesc}>This driver's trip history will appear here.</Text>
-                        </View>
+                        tripsQ.isLoading ? (
+                            <ActivityIndicator color="#FFD400" style={{ marginTop: 30 }} />
+                        ) : recentTrips.length === 0 ? (
+                            <View style={styles.emptyState}>
+                                <Icon name="map-marker-off-outline" size={44} color="#DDDDDD" />
+                                <Text style={styles.emptyTitle}>No recent trips</Text>
+                                <Text style={styles.emptyDesc}>This driver's trip history will appear here.</Text>
+                            </View>
+                        ) : (
+                            <>
+                                <View style={styles.card}>
+                                    {recentTrips.map((t, i, arr) => (
+                                        <React.Fragment key={t.id}>
+                                            <View style={styles.tripRow}>
+                                                <Icon name="map-marker-path" size={18} color="#9E9E9E" />
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.tripRoute} numberOfLines={1}>
+                                                        {t.from_city} → {t.to_city}
+                                                    </Text>
+                                                    <Text style={styles.tripDate}>{tripDate(t.departure_at)}</Text>
+                                                </View>
+                                                <View style={styles.tripTypePill}>
+                                                    <Text style={styles.tripTypeText}>
+                                                        {t.post_type === 'private' ? 'Private' : 'Shared'}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                            {i < arr.length - 1 && <View style={styles.cardDivider} />}
+                                        </React.Fragment>
+                                    ))}
+                                </View>
+                                {tripsQ.isFetchingNextPage && <ActivityIndicator color="#FFD400" style={{ marginVertical: 14 }} />}
+                            </>
+                        )
                     )}
 
                 </View>
@@ -366,10 +530,58 @@ const RideDetailScreen = ({ navigation, route }) => {
                     <Icon name="phone" size={18} color="#07163B" />
                     <Text style={styles.callBtnText}>Call Driver</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.bookBtn} onPress={() => navigation.goBack()}>
-                    <Text style={styles.bookBtnText}>Book Seat</Text>
-                </TouchableOpacity>
+                {canBook && (
+                    <TouchableOpacity style={styles.bookBtn} onPress={openBooking}>
+                        <Text style={styles.bookBtnText}>Book Seat</Text>
+                    </TouchableOpacity>
+                )}
             </View>
+
+            {/* ── Booking sheet ── */}
+            <Modal visible={bookingOpen} transparent animationType="slide" onRequestClose={() => setBookingOpen(false)}>
+                <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={() => setBookingOpen(false)} />
+                <View style={styles.sheet}>
+                    <View style={styles.sheetHandle} />
+                    <Text style={styles.sheetTitle}>Book a Seat</Text>
+                    <Text style={styles.sheetRoute} numberOfLines={1}>{offer?.from} → {offer?.to}</Text>
+
+                    <View style={styles.seatRow}>
+                        <Text style={styles.seatLabel}>Seats</Text>
+                        <View style={styles.stepper}>
+                            <TouchableOpacity
+                                style={[styles.stepBtn, seats <= 1 && styles.stepBtnOff]}
+                                onPress={() => setSeats(s => Math.max(1, s - 1))}
+                                disabled={seats <= 1}
+                            >
+                                <Icon name="minus" size={18} color={seats <= 1 ? '#CCCCCC' : '#07163B'} />
+                            </TouchableOpacity>
+                            <Text style={styles.seatCount}>{seats}</Text>
+                            <TouchableOpacity
+                                style={[styles.stepBtn, seats >= maxSeats && styles.stepBtnOff]}
+                                onPress={() => setSeats(s => Math.min(maxSeats, s + 1))}
+                                disabled={seats >= maxSeats}
+                            >
+                                <Icon name="plus" size={18} color={seats >= maxSeats ? '#CCCCCC' : '#07163B'} />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    <TextInput
+                        style={styles.noteInput}
+                        placeholder="Add a note for the driver (optional)"
+                        placeholderTextColor="#AAAAAA"
+                        value={note}
+                        onChangeText={setNote}
+                        multiline
+                    />
+
+                    <TouchableOpacity style={styles.sendBtn} onPress={sendBooking} disabled={bookSeat.isPending} activeOpacity={0.85}>
+                        <Text style={styles.sendBtnText}>
+                            {bookSeat.isPending ? 'Sending…' : `Send Request · Rs ${Number(total).toLocaleString()}`}
+                        </Text>
+                    </TouchableOpacity>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -513,6 +725,33 @@ const styles = StyleSheet.create({
         marginBottom: 14,
     },
     cardDivider: { height: 1, backgroundColor: '#F5F5F7', marginVertical: 10 },
+
+    // ── Current status section ──
+    statusTop: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: 16,
+    },
+    statusPill: { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5 },
+    statusPillText: { fontSize: 12, fontFamily: Fonts.semiBold },
+    stepperRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6 },
+    stepDot: {
+        width: 22, height: 22, borderRadius: 11,
+        backgroundColor: '#EAEDEE',
+        alignItems: 'center', justifyContent: 'center',
+    },
+    stepDotActive: { backgroundColor: '#109F2A' },
+    stepConnector: { flex: 1, height: 3, backgroundColor: '#EAEDEE', marginHorizontal: 2 },
+    stepConnectorActive: { backgroundColor: '#109F2A' },
+    stepLabelsRow: { flexDirection: 'row', marginTop: 8 },
+    stepLabel: { flex: 1, fontSize: 10, fontFamily: Fonts.regular, color: '#9AA0A6', textAlign: 'center' },
+    stepLabelActive: { color: '#07163B', fontFamily: Fonts.medium },
+
+    // ── Recent trips rows ──
+    tripRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
+    tripRoute: { fontSize: 13.5, fontFamily: Fonts.semiBold, color: '#202223' },
+    tripDate: { fontSize: 11.5, fontFamily: Fonts.regular, color: '#9AA0A6', marginTop: 2 },
+    tripTypePill: { borderWidth: 1, borderColor: '#EAEDEE', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
+    tripTypeText: { fontSize: 11, fontFamily: Fonts.regular, color: '#5D5F62' },
 
     // Route block
     routeBlock: { gap: 0 },
@@ -677,6 +916,31 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     bookBtnText: { fontSize: 14, fontFamily: Fonts.semiBold, color: '#07163B' },
+
+    // Booking sheet
+    sheetBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+    sheet: {
+        backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+        paddingHorizontal: 20, paddingTop: 12, paddingBottom: 36,
+    },
+    sheetHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E0E0E0', alignSelf: 'center', marginBottom: 16 },
+    sheetTitle: { fontSize: 18, fontFamily: Fonts.semiBold, color: '#07163B' },
+    sheetRoute: { fontSize: 13, fontFamily: Fonts.regular, color: '#5D5F62', marginTop: 4, marginBottom: 18 },
+    seatRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
+    seatLabel: { fontSize: 14, fontFamily: Fonts.semiBold, color: '#202223' },
+    stepper: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+    stepBtn: {
+        width: 36, height: 36, borderRadius: 10, borderWidth: 1, borderColor: '#EAEDEE',
+        alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF',
+    },
+    stepBtnOff: { borderColor: '#F0F0F0', backgroundColor: '#FAFAFA' },
+    seatCount: { fontSize: 18, fontFamily: Fonts.bold, color: '#07163B', minWidth: 24, textAlign: 'center' },
+    noteInput: {
+        borderWidth: 1, borderColor: '#EAEDEE', borderRadius: 10, padding: 12, minHeight: 56,
+        fontSize: 13, fontFamily: Fonts.regular, color: '#202223', textAlignVertical: 'top', marginBottom: 18,
+    },
+    sendBtn: { backgroundColor: '#FFD400', borderRadius: 12, paddingVertical: 15, alignItems: 'center' },
+    sendBtnText: { fontSize: 15, fontFamily: Fonts.semiBold, color: '#111111' },
 });
 
 export default RideDetailScreen;

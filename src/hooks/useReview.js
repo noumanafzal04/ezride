@@ -8,16 +8,8 @@ const useInvalidateBookings = () => {
         qc.invalidateQueries({ queryKey: ['my-bookings'] });
         qc.invalidateQueries({ queryKey: ['driver-bookings'] });
         qc.invalidateQueries({ queryKey: ['driver-ride-posts'] });
+        qc.invalidateQueries({ queryKey: ['ride-history'] });
     };
-};
-
-export const useCompleteBooking = (options = {}) => {
-    const invalidate = useInvalidateBookings();
-    return useMutation({
-        mutationFn: (id) => rideService.completeBooking(id),
-        onSuccess: (...a) => { invalidate(); options.onSuccess?.(...a); },
-        onError: options.onError,
-    });
 };
 
 export const useRateBooking = (options = {}) => {

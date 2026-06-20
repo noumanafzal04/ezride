@@ -49,7 +49,7 @@ const SplashScreen = ({ navigation }) => {
         };
 
         bootstrap();
-    }, []);
+    }, [navigation, setRole]);
 
     return (
         <View style={styles.container}>

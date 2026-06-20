@@ -7,11 +7,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
 import Sidebar from '../../components/Sidebar';
-import ReviewSheet from '../../components/ReviewSheet';
 import { useMyBookings, useCancelBooking } from '../../hooks/useMyBookings';
-import { useCompleteBooking, useRateBooking } from '../../hooks/useReview';
-
-const isDue = (iso) => iso && new Date(iso).getTime() <= Date.now();
 
 const TABS = ['Pending', 'Accepted', 'Cancelled'];
 const TAB_STATUSES = {
@@ -32,7 +28,7 @@ const fmtDate = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
     return isNaN(d.getTime()) ? iso
-        : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
 const MyBookingsScreen = ({ navigation }) => {
@@ -46,21 +42,6 @@ const MyBookingsScreen = ({ navigation }) => {
         onSuccess: () => Toast.show({ type: 'success', text1: 'Booking Cancelled' }),
         onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
     });
-
-    const [reviewItem, setReviewItem] = useState(null);
-
-    const completeBooking = useCompleteBooking({
-        onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
-    });
-
-    const rateBooking = useRateBooking({
-        onSuccess: () => { setReviewItem(null); Toast.show({ type: 'success', text1: 'Thanks for your review!' }); },
-        onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
-    });
-
-    // Complete → then prompt for a review right away (skippable)
-    const handleComplete = (item) =>
-        completeBooking.mutate(item.id, { onSuccess: () => setReviewItem(item) });
 
     const currentList = all.filter(b => TAB_STATUSES[activeTab].includes(b.status));
     const tabCount = (tab) => all.filter(b => TAB_STATUSES[tab].includes(b.status)).length;
@@ -89,7 +70,6 @@ const MyBookingsScreen = ({ navigation }) => {
         const isPending = item.status === 'pending';
         const isAccepted = item.status === 'accepted';
         const isClosed = ['rejected', 'cancelled'].includes(item.status);
-        const canComplete = isAccepted && isDue(ride.departure_at);
 
         return (
             <View style={styles.card}>
@@ -144,16 +124,6 @@ const MyBookingsScreen = ({ navigation }) => {
                             disabled={cancelBooking.isPending}
                         >
                             <Text style={styles.cancelText}>Cancel</Text>
-                        </TouchableOpacity>
-                    )}
-                    {canComplete && (
-                        <TouchableOpacity
-                            style={styles.completeBtn}
-                            onPress={() => handleComplete(item)}
-                            disabled={completeBooking.isPending}
-                        >
-                            <Icon name="check-circle-outline" size={15} color="#111111" />
-                            <Text style={styles.completeText}>Mark Complete</Text>
                         </TouchableOpacity>
                     )}
                     {isClosed && (
@@ -230,15 +200,6 @@ const MyBookingsScreen = ({ navigation }) => {
                 }
             />
 
-            <ReviewSheet
-                visible={!!reviewItem}
-                onClose={() => setReviewItem(null)}
-                submitting={rateBooking.isPending}
-                title="Rate your driver"
-                subtitle={reviewItem ? `${reviewItem.ride?.from_city} → ${reviewItem.ride?.to_city}` : ''}
-                onSubmit={(rating, review) => rateBooking.mutate({ id: reviewItem.id, rating, review })}
-            />
-
             <Sidebar
                 visible={sidebarOpen}
                 onClose={() => setSidebarOpen(false)}
@@ -297,12 +258,6 @@ const styles = StyleSheet.create({
     actions: { flexDirection: 'row', gap: 10, marginTop: 4 },
     cancelBtn: { flex: 1, paddingVertical: 11, borderRadius: 10, borderWidth: 1.5, borderColor: '#D83F54', backgroundColor: '#FFF0F2', alignItems: 'center' },
     cancelText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#D83F54' },
-    completeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 10, backgroundColor: '#FFD400' },
-    completeText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#111111' },
-    reviewedRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
-    reviewedText: { fontSize: 13, fontFamily: Fonts.medium, color: '#5D5F62' },
-    reviewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 10, borderWidth: 1.5, borderColor: '#EAEDEE', marginTop: 4 },
-    reviewText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#07163B' },
     searchBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, paddingHorizontal: 16, borderRadius: 10, backgroundColor: '#FFD400' },
     searchText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#111111' },
 

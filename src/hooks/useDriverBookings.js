@@ -1,12 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import rideService from '../services/rideService';
 
-// Driver: bookings received on their posts (status: pending | accepted | rejected)
-export const useDriverBookings = (status, options = {}) =>
+// Driver: bookings received on their posts.
+// filters: { ride_post_id?, status? } — scope to one ride and/or a status.
+export const useDriverBookings = (filters = {}, options = {}) =>
     useQuery({
-        queryKey: ['driver-bookings', status || 'all'],
+        queryKey: ['driver-bookings', filters],
         queryFn: () =>
-            rideService.getDriverBookings(status ? { status } : {})
+            rideService.getDriverBookings(filters)
                 .then(r => r.data?.data?.bookings || []),
         staleTime: 15 * 1000,
         ...options,

@@ -15,6 +15,7 @@ import PostRideScreen from '../screens/driver/PostRideScreen';
 import AvailableRidesScreen from '../screens/user/AvailableRidesScreen';
 import RideDetailScreen from '../screens/driver/RideDetailScreen';
 import RideHistoryScreen from '../screens/user/RideHistoryScreen';
+import ReviewScreen from '../screens/user/ReviewScreen';
 import ChatsScreen from "../screens/chat/ChatsScreen";
 import ChatDetailScreen from "../screens/chat/ChatDetailScreen";
 import MarketplaceScreen from "../screens/buysell/MarketplaceScreen";
@@ -49,6 +50,7 @@ const AppNavigator = () => {
                 <Stack.Screen name="AvailableRides" component={AvailableRidesScreen}/>
                 <Stack.Screen name="RideDetail" component={RideDetailScreen}/>
                 <Stack.Screen name="RideHistory" component={RideHistoryScreen}/>
+                <Stack.Screen name="Review" component={ReviewScreen}/>
 
                 <Stack.Screen name="Chats" component={ChatsScreen}/>
                 <Stack.Screen name="ChatDetail" component={ChatDetailScreen}/>

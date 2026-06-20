@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     StatusBar, TextInput, Switch, Platform, ActivityIndicator, Alert,
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Toast from 'react-native-toast-message';
@@ -21,7 +22,7 @@ const fmtIso = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
     return isNaN(d.getTime()) ? iso
-        : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
 const POST_TYPES = [
@@ -36,14 +37,20 @@ const fmtDateTime = (d) => {
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:00`;
 };
 const fmtDisplay = (d) =>
-    d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 
 const PostRideScreen = ({ navigation }) => {
     const insets = useSafeAreaInsets();
 
-    // A driver may only have one active post — if one exists, show it (read-only) + cancel
+    // A driver may only have one active post — if an OPEN one exists, show it
+    // (read-only) + cancel. Completed/cancelled posts are ignored so the driver
+    // can post again right after ending a ride.
     const postsQuery = useRidePosts();
-    const existingPost = (postsQuery.data?.ride_posts || [])[0] || null;
+    const existingPost = (postsQuery.data?.ride_posts || [])
+        .find(p => ['active', 'full', 'in_progress'].includes(p.status)) || null;
+    // Refresh on focus so an ended/cancelled ride clears immediately.
+    const refetchPosts = postsQuery.refetch;
+    useFocusEffect(useCallback(() => { refetchPosts(); }, [refetchPosts]));
     const cancelExisting = useCancelRidePost({
         onSuccess: () => Toast.show({ type: 'success', text1: 'Ride Cancelled', text2: 'You can now post a new ride.' }),
         onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
@@ -67,6 +74,7 @@ const PostRideScreen = ({ navigation }) => {
 
     // Seats the driver can offer = vehicle capacity − 1 (their own seat excluded)
     const { data: me } = useMe();
+    const isVerified = me?.driver_profile?.verification_status === 'verified';
     const vehicleSeats = me?.vehicles?.[0]?.seating_capacity || 5;
     const maxSeats = Math.max(1, vehicleSeats - 1);
     const seatOptions = Array.from({ length: maxSeats }, (_, i) => i + 1);
@@ -122,7 +130,8 @@ const PostRideScreen = ({ navigation }) => {
     const createPost = useCreateRidePost({
         onSuccess: () => {
             Toast.show({ type: 'success', text1: 'Ride Posted!', text2: 'Your ride is now live for riders.' });
-            navigation.goBack();
+            // Go straight to the requests screen so the driver sees the active ride immediately.
+            navigation.navigate('Main', { screen: 'Rides' });
         },
         onError: (err) => {
             const msg = err.response?.data?.message || 'Could not post the ride. Please try again.';
@@ -143,6 +152,10 @@ const PostRideScreen = ({ navigation }) => {
     };
 
     const handleSubmit = () => {
+        if (!isVerified) {
+            Toast.show({ type: 'info', text1: 'Pending verification', text2: 'You can post rides once your account is verified.' });
+            return;
+        }
         const error = validate();
         if (error) {
             Toast.show({ type: 'error', text1: 'Required', text2: error });
@@ -288,6 +301,14 @@ const PostRideScreen = ({ navigation }) => {
                 keyboardShouldPersistTaps="handled"
             >
                 <View style={styles.body}>
+                    {!isVerified && (
+                        <View style={styles.verifyBanner}>
+                            <Icon name="shield-alert-outline" size={18} color="#92600B" />
+                            <Text style={styles.verifyText}>
+                                You’re not verified yet. Once your driver profile is verified, you can post rides.
+                            </Text>
+                        </View>
+                    )}
                     <View style={styles.mainCard}>
 
                         {/* Post type */}
@@ -468,13 +489,13 @@ const PostRideScreen = ({ navigation }) => {
             {/* Submit */}
             <View style={[styles.bottomBtn, { paddingBottom: 16 }]}>
                 <TouchableOpacity
-                    style={[styles.createBtn, submitting && styles.createBtnDisabled]}
+                    style={[styles.createBtn, (submitting || !isVerified) && styles.createBtnDisabled]}
                     onPress={handleSubmit}
-                    disabled={submitting}
+                    disabled={submitting || !isVerified}
                     activeOpacity={0.85}
                 >
                     <Text style={styles.createBtnText}>
-                        {submitting ? 'Posting…' : 'Post Ride'}
+                        {submitting ? 'Posting…' : !isVerified ? 'Verification pending' : 'Post Ride'}
                     </Text>
                 </TouchableOpacity>
             </View>
@@ -546,6 +567,12 @@ const styles = StyleSheet.create({
     viewRequestsText: { fontSize: 15, fontFamily: Fonts.semiBold, color: '#111111' },
 
     body: { padding: 16 },
+    verifyBanner: {
+        flexDirection: 'row', alignItems: 'center', gap: 8,
+        backgroundColor: '#FFF7ED', borderColor: '#FCD9A8', borderWidth: 1,
+        borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 14,
+    },
+    verifyText: { flex: 1, fontSize: 12.5, fontFamily: Fonts.medium, color: '#92600B', lineHeight: 17 },
     mainCard: {
         backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1,
         borderColor: '#EAEDEE', padding: 16, gap: 12,

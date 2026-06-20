@@ -165,24 +165,21 @@ const HomeScreen = ({navigation}) => {
                     <Text style={styles.searchCardTitle}>Search a Ride</Text>
                     <View style={styles.searchFields}>
                         {/* From */}
-                        <View style={styles.searchField}>
+                        <TouchableOpacity style={styles.searchField} onPress={() => navigation.navigate('AvailableRides')} activeOpacity={0.7}>
                             <View style={styles.searchDotGreen}/>
-                            <Text style={styles.searchFieldText}>Lahore</Text>
-                            <Icon name="crosshairs-gps" size={16} color="#CCCCCC"/>
-                        </View>
+                            <Text style={[styles.searchFieldText, styles.searchPlaceholder]}>From city</Text>
+                            <Icon name="chevron-right" size={16} color="#CCCCCC"/>
+                        </TouchableOpacity>
                         {/* Connector */}
                         <View style={styles.searchConnectorRow}>
                             <View style={styles.searchConnectorLine}/>
-                            <TouchableOpacity style={styles.swapBtn}>
-                                <Icon name="swap-vertical" size={14} color="#07163B"/>
-                            </TouchableOpacity>
                         </View>
                         {/* To */}
-                        <View style={styles.searchField}>
+                        <TouchableOpacity style={styles.searchField} onPress={() => navigation.navigate('AvailableRides')} activeOpacity={0.7}>
                             <View style={styles.searchDotNavy}/>
-                            <Text style={styles.searchFieldText}>Islamabad</Text>
-                            <Icon name="crosshairs-gps" size={16} color="#CCCCCC"/>
-                        </View>
+                            <Text style={[styles.searchFieldText, styles.searchPlaceholder]}>To city</Text>
+                            <Icon name="chevron-right" size={16} color="#CCCCCC"/>
+                        </TouchableOpacity>
                     </View>
                     <TouchableOpacity
                         style={styles.searchBtn}
@@ -495,6 +492,7 @@ const styles = StyleSheet.create({
         backgroundColor: '#07163B',
     },
     searchFieldText: {flex: 1, fontSize: 14, fontFamily: Fonts.medium, color: '#202223'},
+    searchPlaceholder: {color: '#AAAAAA', fontFamily: Fonts.regular},
     searchConnectorRow: {
         flexDirection: 'row',
         alignItems: 'center',
