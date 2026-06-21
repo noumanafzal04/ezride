@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
+import AppHeader from '../../components/AppHeader';
 
 const MAIN_TABS = ['Buy Cars', 'Sell Cars'];
 const SELL_TABS = ['Active', 'Draft', 'Sold'];
@@ -81,15 +82,7 @@ const MarketplaceScreen = ({ navigation }) => {
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
             {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity>
-                    <Icon name="menu" size={24} color="#07163B" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Marketplace</Text>
-                <TouchableOpacity>
-                    <Icon name="bell-outline" size={24} color="#07163B" />
-                </TouchableOpacity>
-            </View>
+            <AppHeader title="Marketplace" />
 
             {/* Main Tabs */}
             <View style={styles.mainTabsRow}>

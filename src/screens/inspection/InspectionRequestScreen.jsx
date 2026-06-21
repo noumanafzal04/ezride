@@ -216,7 +216,7 @@ const InspectionRequestScreen = ({ navigation }) => {
                 </View>
             </ScrollView>
 
-            <View style={styles.bottomBtn}>
+            <View style={[styles.bottomBtn, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity
                     style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
                     onPress={handleSubmit}

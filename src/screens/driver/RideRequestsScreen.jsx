@@ -8,6 +8,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
 import Sidebar from '../../components/Sidebar';
+import AppHeader from '../../components/AppHeader';
 import BottomSheet from '../../components/BottomSheet';
 import ReviewSheet from '../../components/ReviewSheet';
 import useRidePosts, { useCancelRidePost, useRideLifecycle } from '../../hooks/useRidePosts';
@@ -170,7 +171,7 @@ const RideRequestsScreen = ({ navigation }) => {
 
     const handleAction = (action, item) => {
         if (action === 'chat') {
-            navigation.navigate('ChatDetail', { user: item });
+            navigation.navigate('ChatDetail', { bookingId: item.id });
             return;
         }
         setConfirmModal({ action, item });
@@ -320,20 +321,7 @@ const RideRequestsScreen = ({ navigation }) => {
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
             {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => setSidebarOpen(true)}>
-                    <Icon name="menu" size={24} color="#07163B" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Booking Requests</Text>
-                <TouchableOpacity>
-                    <Icon name="bell-outline" size={24} color="#07163B" />
-                    {tabCount('Pending') > 0 && (
-                        <View style={styles.bellBadge}>
-                            <Text style={styles.bellBadgeText}>{tabCount('Pending')}</Text>
-                        </View>
-                    )}
-                </TouchableOpacity>
-            </View>
+            <AppHeader title="Booking Requests" onMenu={() => setSidebarOpen(true)} />
 
             {/* Tabs */}
             <View style={styles.tabsRow}>

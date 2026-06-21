@@ -49,6 +49,13 @@ export const useUserRealtime = () => {
                 qc.invalidateQueries({ queryKey: ['driver-bookings'] });
                 qc.invalidateQueries({ queryKey: ['driver-ride-posts'] });
             });
+            // New chat message anywhere → bump the Messages badge optimistically
+            // (no per-message refetch). The count reconciles on read/login; the
+            // inbox refetches only while it's actually open.
+            channel.listen('.message.sent', () => {
+                qc.setQueryData(['chat-unread'], (n) => (Number(n) || 0) + 1);
+                qc.invalidateQueries({ queryKey: ['conversations'] });
+            });
         } catch (e) {
             // Reverb not reachable yet — app still works, just no live updates.
         }
@@ -57,6 +64,29 @@ export const useUserRealtime = () => {
             try { getEcho().leave(`user.${userId}`); } catch (e) { /* noop */ }
         };
     }, [userId, qc]);
+};
+
+// Subscribe to ONE conversation's private channel while the thread is open.
+// Fires `onMessage(payload)` for each live message. Re-subscribes when the id
+// changes; uses a ref so the callback can change without re-binding.
+export const useConversationRealtime = (conversationId, onMessage) => {
+    const cbRef = useRef(onMessage);
+    useEffect(() => { cbRef.current = onMessage; }, [onMessage]);
+
+    useEffect(() => {
+        if (!conversationId) return undefined;
+
+        try {
+            const channel = getEcho().private(`conversation.${conversationId}`);
+            channel.listen('.message.sent', (payload) => cbRef.current?.(payload));
+        } catch (e) {
+            /* noop — no live updates until Reverb is reachable */
+        }
+
+        return () => {
+            try { getEcho().leave(`conversation.${conversationId}`); } catch (e) { /* noop */ }
+        };
+    }, [conversationId]);
 };
 
 // Subscribe to the public "rides" channel. Fires `onNewPost(payload)` whenever a

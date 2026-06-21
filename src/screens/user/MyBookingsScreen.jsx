@@ -55,13 +55,7 @@ const MyBookingsScreen = ({ navigation }) => {
 
     const callDriver = (phone) => phone && Linking.openURL(`tel:${phone}`);
     const goSearch = () => navigation.navigate('AvailableRides');
-    const goChat = (driver) => navigation.navigate('ChatDetail', {
-        user: {
-            name: [driver?.first_name, driver?.last_name].filter(Boolean).join(' ') || 'Driver',
-            phone: driver?.phone_number,
-            id: driver?.id,
-        },
-    });
+    const goChat = (booking) => navigation.navigate('ChatDetail', { bookingId: booking.id });
 
     const renderCard = ({ item }) => {
         const ride = item.ride || {};
@@ -106,7 +100,7 @@ const MyBookingsScreen = ({ navigation }) => {
                             </Text>
                             <Text style={styles.driverSub}>Your ride is confirmed</Text>
                         </View>
-                        <TouchableOpacity style={styles.msgBtn} onPress={() => goChat(driver)}>
+                        <TouchableOpacity style={styles.msgBtn} onPress={() => goChat(item)}>
                             <Icon name="message-outline" size={16} color="#07163B" />
                         </TouchableOpacity>
                         <TouchableOpacity style={styles.callBtn} onPress={() => callDriver(driver.phone_number)}>

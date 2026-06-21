@@ -4,6 +4,7 @@ import {
     TouchableOpacity, StatusBar, TextInput,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Fonts from '../../constants/fonts';
 
 const AMOUNTS = ['500', '1,000', '2,000', '5,000', '10,000', '20,000'];
@@ -16,6 +17,7 @@ const PAYMENT_METHODS = [
 ];
 
 const TopUpScreen = ({navigation}) => {
+    const insets = useSafeAreaInsets();
     const [selectedAmount, setSelectedAmount] = useState('');
     const [customAmount, setCustomAmount] = useState('');
     const [selectedMethod, setSelectedMethod] = useState('jazzcash');
@@ -127,7 +129,7 @@ const TopUpScreen = ({navigation}) => {
             </ScrollView>
 
             {/* Proceed Button */}
-            <View style={styles.bottomBtn}>
+            <View style={[styles.bottomBtn, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity
                     style={[styles.proceedBtn, !displayAmount && styles.proceedBtnDisabled]}
                     disabled={!displayAmount}

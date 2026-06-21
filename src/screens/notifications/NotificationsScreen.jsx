@@ -26,6 +26,13 @@ const TYPE_META = {
     review_received:   { icon: 'star-outline',           color: '#FFC107', bg: '#FFF8E1' },
     driver_verified:   { icon: 'shield-check-outline',   color: '#109F2A', bg: '#E8F8EE' },
     inspection_update: { icon: 'car-wrench',             color: '#1D6AFF', bg: '#EEF4FF' },
+    service_booking_requested: { icon: 'tools',               color: '#1D6AFF', bg: '#EEF4FF' },
+    service_booking_accepted:  { icon: 'check-circle-outline', color: '#109F2A', bg: '#E8F8EE' },
+    service_booking_rejected:  { icon: 'close-circle-outline', color: '#D83F54', bg: '#FFF0F2' },
+    service_booking_started:   { icon: 'progress-wrench',     color: '#0F8A8A', bg: '#E6F7F7' },
+    service_booking_completed: { icon: 'check-decagram-outline', color: '#109F2A', bg: '#E8F8EE' },
+    service_booking_cancelled: { icon: 'close-octagon-outline', color: '#D83F54', bg: '#FFF0F2' },
+    service_provider_approved: { icon: 'shield-check-outline', color: '#109F2A', bg: '#E8F8EE' },
 };
 const DEFAULT_META = { icon: 'bell-outline', color: '#6C63FF', bg: '#F0EEFF' };
 
@@ -62,6 +69,14 @@ const NotificationsScreen = ({ navigation }) => {
 
         if (t === 'inspection_update' && inspectionId) {
             navigation.navigate('InspectionDetail', { id: inspectionId });
+        } else if (t === 'service_booking_requested' || t === 'service_booking_cancelled') {
+            // Provider-facing → their incoming requests
+            navigation.navigate('ProviderServiceRequests');
+        } else if (t === 'service_provider_approved') {
+            navigation.navigate('ServiceProviderRegister');
+        } else if (t.startsWith('service_booking_')) {
+            // Customer-facing updates → their requests
+            navigation.navigate('MyServiceRequests');
         } else if (t === 'booking_requested' || t === 'booking_cancelled') {
             // Driver-facing → their Booking Requests screen (see who requested)
             navigation.navigate('Main', { screen: 'Rides' });

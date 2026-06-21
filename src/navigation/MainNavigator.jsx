@@ -3,10 +3,10 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useApp } from '../context/AppContext';
-import { useUnreadCount } from '../hooks/useNotifications';
+import { useChatUnread } from '../hooks/useChat';
 import { useUserRealtime, useRealtimeConnected } from '../hooks/useRealtime';
 import HomeScreen from '../screens/HomeScreen';
-import NotificationsScreen from '../screens/notifications/NotificationsScreen';
+import ChatsScreen from '../screens/chat/ChatsScreen';
 import MarketplaceScreen from '../screens/buysell/MarketplaceScreen';
 
 // User
@@ -24,7 +24,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
     const isDriver = role === 'driver';
     // Live via Reverb; poll only as a fallback if the socket drops.
     const connected = useRealtimeConnected();
-    const { data: unread = 0 } = useUnreadCount({
+    const { data: unread = 0 } = useChatUnread({
         refetchInterval: connected ? false : 30000,
         refetchIntervalInBackground: false,
     });
@@ -39,7 +39,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     Rides: isFocused ? 'car' : 'car-outline',
                     Post: 'plus',
                     BuySell: isFocused ? 'tag' : 'tag-outline',
-                    Notifications: isFocused ? 'bell' : 'bell-outline',
+                    Messages: isFocused ? 'message' : 'message-outline',
                 };
 
                 const labelMap = {
@@ -47,7 +47,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     Rides: 'Rides',
                     Post: '',
                     BuySell: 'Buy/Sell',
-                    Notifications: 'Notifications',
+                    Messages: 'Messages',
                 };
 
                 const onPress = () => {
@@ -67,7 +67,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     );
                 }
 
-                const showBadge = route.name === 'Notifications' && unread > 0;
+                const showBadge = route.name === 'Messages' && unread > 0;
 
                 return (
                     <TouchableOpacity key={route.key} style={styles.tabItem} onPress={onPress} activeOpacity={0.85}>
@@ -103,7 +103,7 @@ const MainNavigator = () => {
             <Tab.Screen name="Rides" component={RidesScreen} />
             <Tab.Screen name="Post" component={PostRideScreen} />
             <Tab.Screen name="BuySell" component={MarketplaceScreen} />
-            <Tab.Screen name="Notifications" component={NotificationsScreen} />
+            <Tab.Screen name="Messages" component={ChatsScreen} />
         </Tab.Navigator>
     );
 };

@@ -16,7 +16,6 @@ import AvailableRidesScreen from '../screens/user/AvailableRidesScreen';
 import RideDetailScreen from '../screens/driver/RideDetailScreen';
 import RideHistoryScreen from '../screens/user/RideHistoryScreen';
 import ReviewScreen from '../screens/user/ReviewScreen';
-import ChatsScreen from "../screens/chat/ChatsScreen";
 import ChatDetailScreen from "../screens/chat/ChatDetailScreen";
 import MarketplaceScreen from "../screens/buysell/MarketplaceScreen";
 import FeaturedPostsScreen from "../screens/buysell/FeaturedPostsScreen";
@@ -34,6 +33,14 @@ import InspectionDetailScreen from '../screens/inspection/InspectionDetailScreen
 import AdminInspectionsScreen from '../screens/inspection/AdminInspectionsScreen';
 import InspectionReportScreen from '../screens/inspection/InspectionReportScreen';
 import TrackInspectionScreen from '../screens/inspection/TrackInspectionScreen';
+import NotificationsScreen from '../screens/notifications/NotificationsScreen';
+import ServiceProviderRegisterScreen from '../screens/services/ServiceProviderRegisterScreen';
+import ServicesScreen from '../screens/services/ServicesScreen';
+import ServiceProvidersScreen from '../screens/services/ServiceProvidersScreen';
+import ServiceProviderDetailScreen from '../screens/services/ServiceProviderDetailScreen';
+import ServiceRequestScreen from '../screens/services/ServiceRequestScreen';
+import MyServiceRequestsScreen from '../screens/services/MyServiceRequestsScreen';
+import ProviderServiceRequestsScreen from '../screens/services/ProviderServiceRequestsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -58,7 +65,6 @@ const AppNavigator = () => {
                 <Stack.Screen name="RideHistory" component={RideHistoryScreen}/>
                 <Stack.Screen name="Review" component={ReviewScreen}/>
 
-                <Stack.Screen name="Chats" component={ChatsScreen}/>
                 <Stack.Screen name="ChatDetail" component={ChatDetailScreen}/>
 
                 <Stack.Screen name="Marketplace" component={MarketplaceScreen}/>
@@ -79,6 +85,14 @@ const AppNavigator = () => {
                 <Stack.Screen name="AdminInspections" component={AdminInspectionsScreen}/>
                 <Stack.Screen name="InspectionReport" component={InspectionReportScreen}/>
                 <Stack.Screen name="TrackInspection" component={TrackInspectionScreen}/>
+                <Stack.Screen name="Notifications" component={NotificationsScreen}/>
+                <Stack.Screen name="ServiceProviderRegister" component={ServiceProviderRegisterScreen}/>
+                <Stack.Screen name="Services" component={ServicesScreen}/>
+                <Stack.Screen name="ServiceProviders" component={ServiceProvidersScreen}/>
+                <Stack.Screen name="ServiceProviderDetail" component={ServiceProviderDetailScreen}/>
+                <Stack.Screen name="ServiceRequest" component={ServiceRequestScreen}/>
+                <Stack.Screen name="MyServiceRequests" component={MyServiceRequestsScreen}/>
+                <Stack.Screen name="ProviderServiceRequests" component={ProviderServiceRequestsScreen}/>
 
             </Stack.Navigator>
         </NavigationContainer>

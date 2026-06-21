@@ -8,6 +8,8 @@ import {useFocusEffect} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../constants/fonts';
 import Sidebar from '../components/Sidebar';
+import { useUnreadCount } from '../hooks/useNotifications';
+import { useServiceCategories } from '../hooks/useServices';
 
 const {width} = Dimensions.get('window');
 const CARD_WIDTH = width - 40; // 20px margin each side
@@ -76,6 +78,8 @@ const UPCOMING = [
 
 const HomeScreen = ({navigation}) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const { data: notifUnread = 0 } = useUnreadCount();
+    const { data: serviceCats = [] } = useServiceCategories();
     const [activeBanner, setActiveBanner] = useState(0);
     const bannerRef = useRef(null);
     const lastBack = useRef(0);
@@ -115,10 +119,10 @@ const HomeScreen = ({navigation}) => {
                 <Text style={styles.logo}>EZRide</Text>
                 <TouchableOpacity
                     style={styles.notifBtn}
-                    onPress={() => navigation.navigate('Chats')}
+                    onPress={() => navigation.navigate('Notifications')}
                 >
                     <Icon name="bell-outline" size={20} color="#07163B"/>
-                    <View style={styles.notifDot}/>
+                    {notifUnread > 0 && <View style={styles.notifDot}/>}
                 </TouchableOpacity>
             </View>
 
@@ -160,6 +164,37 @@ const HomeScreen = ({navigation}) => {
                         </TouchableOpacity>
                     ))}
                 </View>
+
+                {/* ── CAR SERVICES ── */}
+                {serviceCats.length > 0 && (
+                    <View style={styles.svcSection}>
+                        <View style={styles.svcHead}>
+                            <Text style={styles.svcTitle}>Car Services</Text>
+                            <TouchableOpacity onPress={() => navigation.navigate('Services')}>
+                                <Text style={styles.svcSeeAll}>See all</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <FlatList
+                            data={serviceCats.slice(0, 8)}
+                            keyExtractor={c => String(c.id)}
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={styles.svcRow}
+                            renderItem={({ item: c }) => (
+                                <TouchableOpacity
+                                    style={styles.svcItem}
+                                    activeOpacity={0.7}
+                                    onPress={() => navigation.navigate('ServiceProviders', { category: c })}
+                                >
+                                    <View style={styles.svcIcon}>
+                                        <Icon name={c.icon || 'wrench'} size={22} color="#07163B" />
+                                    </View>
+                                    <Text style={styles.svcLabel} numberOfLines={1}>{c.name}</Text>
+                                </TouchableOpacity>
+                            )}
+                        />
+                    </View>
+                )}
 
                 {/* ── SEARCH RIDE ── */}
                 <View style={styles.searchCard}>
@@ -452,6 +487,16 @@ const styles = StyleSheet.create({
         borderBottomColor: '#F0F0F0',
     },
     actionItem: {flex: 1, alignItems: 'center', gap: 6},
+
+    // Car services row
+    svcSection: {marginTop: 18, marginBottom: 4},
+    svcHead: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12},
+    svcTitle: {fontSize: 15, fontFamily: Fonts.semiBold, color: '#07163B'},
+    svcSeeAll: {fontSize: 13, fontFamily: Fonts.semiBold, color: '#1D6AFF'},
+    svcRow: {paddingHorizontal: 16, gap: 16},
+    svcItem: {alignItems: 'center', gap: 6, width: 66},
+    svcIcon: {width: 54, height: 54, borderRadius: 27, backgroundColor: '#FFF4C2', alignItems: 'center', justifyContent: 'center'},
+    svcLabel: {fontSize: 10.5, fontFamily: Fonts.regular, color: '#202223', textAlign: 'center'},
     actionIcon: {
         width: 50, height: 50, borderRadius: 14,
         backgroundColor: '#F8F8F8',

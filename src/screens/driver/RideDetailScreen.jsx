@@ -7,6 +7,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Fonts from '../../constants/fonts';
 import config from '../../config';
 import useRideDetail, { useDriverSummary, useDriverReviews, useDriverTrips } from '../../hooks/useRideDetail';
@@ -117,6 +118,7 @@ const StarRating = ({ rating }) => (
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const RideDetailScreen = ({ navigation, route }) => {
+    const insets = useSafeAreaInsets();
     const [activeTab, setActiveTab] = useState(0);
     const [activeImage, setActiveImage] = useState(0);
 
@@ -518,7 +520,7 @@ const RideDetailScreen = ({ navigation, route }) => {
             </ScrollView>
 
             {/* ── BOTTOM ACTIONS ── */}
-            <View style={styles.bottomBar}>
+            <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity style={styles.chatBtn}>
                     <Icon name="message-outline" size={18} color="#07163B" />
                     <Text style={styles.chatBtnText}>Chat</Text>

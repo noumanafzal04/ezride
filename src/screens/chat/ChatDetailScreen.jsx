@@ -1,42 +1,97 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
     View, Text, StyleSheet, FlatList,
     TouchableOpacity, StatusBar, TextInput,
-    KeyboardAvoidingView, Platform,
+    KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
+import {
+    useMessages, useSendMessage, useMarkConversationRead,
+    useConversationForBooking, useConversationForServiceBooking,
+} from '../../hooks/useChat';
+import { useConversationRealtime, useRealtimeConnected } from '../../hooks/useRealtime';
 
-const QUICK_REPLIES = ['Hi!', 'Where are you?', "I'm sharing my car's picture", 'Is the..'];
+const fmtTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? '' : d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true });
+};
 
-const MESSAGES = [
-    { id: '1', text: 'Great! I will see you on Monday at 6:00 pm.', time: '12:48 am', mine: false },
-    { id: '2', text: 'Great! I will see you on Monday at 6:00 pm.', time: '12:48 am', mine: true },
-    { id: '3', text: "I'll be next to the shopping mall", time: '12:48 am', mine: true },
-    { id: '4', text: 'Great! I will see you on Monday at 6:00 pm.', time: '12:48 am', mine: false },
-];
+// Tap-to-send starters — shown only on an empty chat.
+const QUICK_REPLIES = ['Hi 👋', 'Pickup location?'];
 
 const ChatDetailScreen = ({ navigation, route }) => {
-    const chat = route?.params?.chat;
-    const [message, setMessage] = useState('');
-    const [messages, setMessages] = useState(MESSAGES);
+    const params = route?.params || {};
+    const qc = useQueryClient();
+    const insets = useSafeAreaInsets();
 
-    const sendMessage = () => {
-        if (!message.trim()) return;
-        setMessages(prev => [...prev, {
-            id: Date.now().toString(),
-            text: message,
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            mine: true,
-        }]);
-        setMessage('');
+    // Resolve the conversation: passed directly, or looked up by ride/service booking id.
+    const byBooking = useConversationForBooking(!params.conversationId && !params.serviceBookingId ? params.bookingId : null);
+    const byService = useConversationForServiceBooking(!params.conversationId ? params.serviceBookingId : null);
+    const conversation = params.conversation || byBooking.data || byService.data || null;
+    const conversationId = params.conversationId || conversation?.id || null;
+
+    const isClosed = conversation?.status === 'closed';
+    const otherName = conversation?.other_party?.name || 'Chat';
+
+    const [text, setText] = useState('');
+
+    // Live via Reverb; poll the thread only as a fallback if the socket is down.
+    const connected = useRealtimeConnected();
+    const messagesQuery = useMessages(conversationId, {
+        refetchInterval: connected ? false : 8000,
+        refetchIntervalInBackground: false,
+    });
+    const messages = (messagesQuery.data?.pages || []).flatMap(p => p.messages || []); // newest first
+
+    const send = useSendMessage(conversationId);
+    const markRead = useMarkConversationRead();
+
+    // Mark read on open (and again when new messages arrive, below).
+    useEffect(() => {
+        if (conversationId) markRead.mutate(conversationId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [conversationId]);
+
+    const onLiveMessage = useCallback(() => {
+        if (!conversationId) return;
+        qc.invalidateQueries({ queryKey: ['messages', conversationId] });
+        markRead.mutate(conversationId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [conversationId, qc]);
+    useConversationRealtime(conversationId, onLiveMessage);
+
+    const doSend = (body, onErr) => {
+        if (!body || !conversationId || send.isPending) return;
+        send.mutate(body, {
+            onError: (err) => {
+                onErr?.();
+                Toast.show({ type: 'error', text1: 'Not sent', text2: err.response?.data?.message || 'Check your connection.' });
+            },
+        });
     };
 
+    const handleSend = () => {
+        const body = text.trim();
+        if (!body) return;
+        setText('');
+        doSend(body, () => setText(body)); // restore on failure
+    };
+
+    const sendQuick = (q) => doSend(q);
+
+    // Only on a fresh chat with no messages yet.
+    const showQuick = !isClosed && !messagesQuery.isLoading && messages.length === 0 && !send.isPending;
+
     const renderMessage = ({ item }) => (
-        <View style={[styles.msgRow, item.mine && styles.msgRowMine]}>
-            <View style={[styles.msgBubble, item.mine ? styles.msgBubbleMine : styles.msgBubbleTheirs]}>
-                <Text style={[styles.msgText, item.mine && styles.msgTextMine]}>{item.text}</Text>
-                <Text style={[styles.msgTime, item.mine && styles.msgTimeMine]}>{item.time}</Text>
+        <View style={[styles.msgRow, item.is_mine && styles.msgRowMine]}>
+            <View style={[styles.bubble, item.is_mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+                <Text style={styles.msgText}>{item.body}</Text>
+                <Text style={styles.msgTime}>{fmtTime(item.created_at)}</Text>
             </View>
         </View>
     );
@@ -45,272 +100,179 @@ const ChatDetailScreen = ({ navigation, route }) => {
         <KeyboardAvoidingView
             style={styles.root}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={0}
         >
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
-            {/* Header */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()}>
                     <Icon name="arrow-left" size={22} color="#07163B" />
                 </TouchableOpacity>
                 <View style={styles.headerCenter}>
                     <View style={styles.headerAvatar}>
-                        <Icon name="account" size={20} color="#CCCCCC" />
+                        <Text style={styles.headerInitial}>{(otherName?.[0] || '?').toUpperCase()}</Text>
                     </View>
-                    <View>
-                        <Text style={styles.headerName}>{chat?.name || 'Amir Shehzad'}</Text>
-                        <Text style={styles.headerStatus}>Active 4 mins ago</Text>
+                    <View style={styles.headerTextWrap}>
+                        <Text style={styles.headerName} numberOfLines={1}>{otherName}</Text>
+                        {!!conversation?.route && <Text style={styles.headerRoute} numberOfLines={1}>{conversation.route}</Text>}
                     </View>
                 </View>
-                <TouchableOpacity>
-                    <Icon name="phone-outline" size={22} color="#07163B" />
+                <View style={styles.headerSpacer} />
+            </View>
+
+            {/* Ride banner — which ride this chat is about; tap to view the post */}
+            {!!conversation?.ride && (
+                <TouchableOpacity
+                    style={styles.rideBar}
+                    activeOpacity={0.7}
+                    onPress={() => navigation.navigate('RideDetail', { offer: { id: conversation.ride.ride_post_id } })}
+                >
+                    <Icon name="car-outline" size={15} color="#07163B" />
+                    <Text style={styles.rideRoute} numberOfLines={1}>{conversation.ride.route}</Text>
+                    {!!conversation.ride.seats && (
+                        <Text style={styles.rideMeta}>· {conversation.ride.seats} seat{conversation.ride.seats > 1 ? 's' : ''}</Text>
+                    )}
+                    {conversation.ride.fare != null && (
+                        <Text style={styles.rideFare}>Rs {Number(conversation.ride.fare).toLocaleString()}</Text>
+                    )}
+                    <Icon name="chevron-right" size={16} color="#9AA0A6" />
                 </TouchableOpacity>
-            </View>
+            )}
 
-            {/* Ride Info Bar */}
-            <View style={styles.rideInfoBar}>
-                <Text style={styles.rideRoute}>Lahore → Islamabad</Text>
-                <View style={styles.confirmedBadge}>
-                    <Text style={styles.confirmedText}>Confirmed</Text>
+            {/* Service banner — which service this chat is about */}
+            {!conversation?.ride && !!conversation?.service && (
+                <View style={styles.rideBar}>
+                    <Icon name={conversation.service.icon || 'tools'} size={15} color="#07163B" />
+                    <Text style={styles.rideRoute} numberOfLines={1}>{conversation.service.category || 'Service'}</Text>
+                    {!!conversation.service.business_name && (
+                        <Text style={styles.rideMeta} numberOfLines={1}>· {conversation.service.business_name}</Text>
+                    )}
                 </View>
-                <Text style={styles.ridePrice}>Rs. 2500</Text>
-            </View>
+            )}
 
-            {/* Messages */}
-            <FlatList
-                data={messages}
-                keyExtractor={item => item.id}
-                renderItem={renderMessage}
-                contentContainerStyle={styles.messagesList}
-                showsVerticalScrollIndicator={false}
-            />
-
-            {/* Quick Replies */}
-            <View style={styles.quickRepliesRow}>
-                {QUICK_REPLIES.map(reply => (
-                    <TouchableOpacity
-                        key={reply}
-                        style={styles.quickReply}
-                        onPress={() => setMessage(reply)}
-                    >
-                        <Text style={styles.quickReplyText}>{reply}</Text>
-                    </TouchableOpacity>
-                ))}
-            </View>
-
-            {/* Input Bar */}
-            <View style={styles.inputBar}>
-                <TextInput
-                    style={styles.input}
-                    placeholder="Type Here"
-                    placeholderTextColor="#AAAAAA"
-                    value={message}
-                    onChangeText={setMessage}
-                    multiline
+            {messagesQuery.isLoading ? (
+                <View style={styles.center}><ActivityIndicator color="#FFD400" /></View>
+            ) : (
+                <FlatList
+                    data={messages}
+                    keyExtractor={item => String(item.id)}
+                    renderItem={renderMessage}
+                    inverted
+                    contentContainerStyle={styles.list}
+                    showsVerticalScrollIndicator={false}
+                    onEndReachedThreshold={0.4}
+                    onEndReached={() => { if (messagesQuery.hasNextPage && !messagesQuery.isFetchingNextPage) messagesQuery.fetchNextPage(); }}
+                    ListEmptyComponent={
+                        <View style={styles.emptyInverted}>
+                            <Text style={styles.emptyText}>No messages yet — say hello 👋</Text>
+                        </View>
+                    }
                 />
-                <TouchableOpacity style={styles.attachBtn}>
-                    <Icon name="link-variant" size={20} color="#9E9E9E" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.sendBtn} onPress={sendMessage}>
-                    <Icon name="send" size={18} color="#111111" />
-                </TouchableOpacity>
-            </View>
+            )}
+
+            {isClosed ? (
+                <View style={[styles.closedBar, { paddingBottom: insets.bottom + 14 }]}>
+                    <Icon name="lock-outline" size={16} color="#9AA0A6" />
+                    <Text style={styles.closedText}>This ride is complete. The conversation is closed.</Text>
+                </View>
+            ) : (
+                <View>
+                    {showQuick && (
+                        <View style={styles.quickWrap}>
+                            {QUICK_REPLIES.map(q => (
+                                <TouchableOpacity key={q} style={styles.quickChip} onPress={() => sendQuick(q)} activeOpacity={0.8}>
+                                    <Text style={styles.quickText}>{q}</Text>
+                                </TouchableOpacity>
+                            ))}
+                        </View>
+                    )}
+                    <View style={[styles.inputBar, { paddingBottom: insets.bottom + 10 }]}>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Type a message"
+                            placeholderTextColor="#AAAAAA"
+                            value={text}
+                            onChangeText={setText}
+                            multiline
+                        />
+                        <TouchableOpacity
+                            style={[styles.sendBtn, (!text.trim() || send.isPending) && styles.sendBtnDisabled]}
+                            onPress={handleSend}
+                            disabled={!text.trim() || send.isPending}
+                        >
+                            <Icon name="send" size={18} color="#111111" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
         </KeyboardAvoidingView>
     );
 };
 
 const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F5F5F7' },
-
-    // Header
     header: {
-        backgroundColor: '#FFFFFF',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingTop: 52,
-        paddingBottom: 14,
-        paddingHorizontal: 20,
-        borderBottomWidth: 1,
-        borderBottomColor: '#EAEDEE',
+        backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center',
+        paddingTop: 52, paddingBottom: 14, paddingHorizontal: 20,
+        borderBottomWidth: 1, borderBottomColor: '#EAEDEE',
     },
-    headerCenter: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        flex: 1,
-        paddingHorizontal: 12,
-    },
-    headerAvatar: {
-        width: 38,
-        height: 38,
-        borderRadius: 19,
-        backgroundColor: '#EEEEEE',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    headerName: {
-        fontSize: 14,
-        fontFamily: Fonts.semiBold,
-        color: '#07163B',
-    },
-    headerStatus: {
-        fontSize: 11,
-        fontFamily: Fonts.regular,
-        color: '#109F2A',
-    },
+    headerCenter: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, paddingHorizontal: 12 },
+    headerAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#FFF4C2', alignItems: 'center', justifyContent: 'center' },
+    headerInitial: { fontSize: 15, fontFamily: Fonts.bold, color: '#07163B' },
+    headerTextWrap: { flex: 1 },
 
-    // Ride Info
-    rideInfoBar: {
-        backgroundColor: '#FFFFFF',
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        gap: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#EAEDEE',
+    // Ride banner
+    rideBar: {
+        flexDirection: 'row', alignItems: 'center', gap: 6,
+        backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingVertical: 10,
+        borderBottomWidth: 1, borderBottomColor: '#EAEDEE',
     },
-    rideRoute: {
-        fontSize: 13,
-        fontFamily: Fonts.semiBold,
-        color: '#202223',
-    },
-    confirmedBadge: {
-        backgroundColor: '#109F2A0F',
-        borderRadius: 20,
-        paddingHorizontal: 10,
-        paddingVertical: 3,
-        borderWidth: 1,
-        borderColor: '#109F2A',
-    },
-    confirmedText: {
-        fontSize: 11,
-        fontFamily: Fonts.medium,
-        color: '#109F2A',
-    },
-    ridePrice: {
-        fontSize: 13,
-        fontFamily: Fonts.bold,
-        color: '#202223',
-        marginLeft: 'auto',
-    },
+    rideRoute: { fontSize: 12.5, fontFamily: Fonts.semiBold, color: '#07163B', maxWidth: '46%' },
+    rideMeta: { fontSize: 12, fontFamily: Fonts.regular, color: '#5D5F62' },
+    rideFare: { marginLeft: 'auto', fontSize: 12.5, fontFamily: Fonts.semiBold, color: '#07163B' },
+    headerName: { fontSize: 14.5, fontFamily: Fonts.semiBold, color: '#07163B' },
+    headerRoute: { fontSize: 11.5, fontFamily: Fonts.regular, color: '#9AA0A6' },
+    headerSpacer: { width: 22 },
 
-    // Messages
-    messagesList: {
-        padding: 16,
-        gap: 10,
-    },
-    msgRow: {
-        flexDirection: 'row',
-        justifyContent: 'flex-start',
-        marginBottom: 8,
-    },
-    msgRowMine: {
-        justifyContent: 'flex-end',
-    },
-    msgBubble: {
-        maxWidth: '75%',
-        borderRadius: 16,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-        gap: 4,
-    },
-    msgBubbleTheirs: {
-        backgroundColor: '#FFFFFF',
-        borderWidth: 1,
-        borderColor: '#EAEDEE',
-        borderBottomLeftRadius: 4,
-    },
-    msgBubbleMine: {
-        backgroundColor: '#FFD40038',
-        borderBottomRightRadius: 4,
-    },
-    msgText: {
-        fontSize: 13,
-        fontFamily: Fonts.regular,
-        color: '#202223',
-        lineHeight: 19,
-    },
-    msgTextMine: {
-        color: '#202223',
-    },
-    msgTime: {
-        fontSize: 10,
-        fontFamily: Fonts.regular,
-        color: '#AAAAAA',
-        alignSelf: 'flex-end',
-    },
-    msgTimeMine: {
-        color: '#9E9E9E',
-    },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+    list: { padding: 16, gap: 8, flexGrow: 1 },
+    emptyInverted: { alignItems: 'center', paddingVertical: 40, transform: [{ scaleY: -1 }] },
+    emptyText: { fontSize: 13, fontFamily: Fonts.regular, color: '#9AA0A6' },
 
-    // Quick Replies
-    quickRepliesRow: {
-        flexDirection: 'row',
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        gap: 8,
-        backgroundColor: '#F5F5F7',
-    },
-    quickReply: {
-        borderWidth: 1,
-        borderColor: '#D7DBDE',
-        borderRadius: 20,
-        paddingHorizontal: 12,
-        paddingVertical: 7,
-        backgroundColor: '#FFFFFF',
-    },
-    quickReplyText: {
-        fontSize: 12,
-        fontFamily: Fonts.regular,
-        color: '#5D5F62',
-    },
+    msgRow: { flexDirection: 'row', justifyContent: 'flex-start' },
+    msgRowMine: { justifyContent: 'flex-end' },
+    bubble: { maxWidth: '78%', borderRadius: 16, paddingHorizontal: 14, paddingVertical: 9, gap: 3 },
+    bubbleTheirs: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAEDEE', borderBottomLeftRadius: 4 },
+    bubbleMine: { backgroundColor: '#FFF4C2', borderBottomRightRadius: 4 },
+    msgText: { fontSize: 13.5, fontFamily: Fonts.regular, color: '#202223', lineHeight: 19 },
+    msgTime: { fontSize: 10, fontFamily: Fonts.regular, color: '#9AA0A6', alignSelf: 'flex-end' },
 
-    // Input Bar
+    // Quick starters — only on an empty chat, small pills above the input.
+    quickWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 12, paddingTop: 8 },
+    quickChip: {
+        borderWidth: 1, borderColor: '#E3E5E8', borderRadius: 18,
+        paddingHorizontal: 14, paddingVertical: 8, backgroundColor: '#FFFFFF',
+    },
+    quickText: { fontSize: 13, fontFamily: Fonts.medium, color: '#07163B' },
+
     inputBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#FFFFFF',
-        paddingHorizontal: 12,
-        paddingVertical: 10,
-        paddingBottom: 28,
-        borderTopWidth: 1,
-        borderTopColor: '#EAEDEE',
-        gap: 10,
+        flexDirection: 'row', alignItems: 'flex-end', gap: 10,
+        backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 10, paddingBottom: 28,
+        borderTopWidth: 1, borderTopColor: '#EAEDEE',
     },
     input: {
-        flex: 1,
-        borderWidth: 1,
-        borderColor: '#EAEDEE',
-        borderRadius: 24,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        fontSize: 14,
-        fontFamily: Fonts.regular,
-        color: '#202223',
-        maxHeight: 100,
-        backgroundColor: '#FFFFFF',
+        flex: 1, borderWidth: 1, borderColor: '#EAEDEE', borderRadius: 22,
+        paddingHorizontal: 16, paddingVertical: 10, maxHeight: 110,
+        fontSize: 14, fontFamily: Fonts.regular, color: '#202223', backgroundColor: '#FFFFFF',
     },
-    attachBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        borderWidth: 1,
-        borderColor: '#EAEDEE',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: '#FFFFFF',
+    sendBtn: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#FFD400', alignItems: 'center', justifyContent: 'center' },
+    sendBtnDisabled: { backgroundColor: '#E5E7EB' },
+
+    closedBar: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+        backgroundColor: '#F1F2F4', paddingVertical: 16, paddingBottom: 30,
+        borderTopWidth: 1, borderTopColor: '#EAEDEE',
     },
-    sendBtn: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        backgroundColor: '#FFD400',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
+    closedText: { fontSize: 12.5, fontFamily: Fonts.medium, color: '#9AA0A6' },
 });
 
 export default ChatDetailScreen;

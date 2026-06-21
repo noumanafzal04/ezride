@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Fonts from '../../constants/fonts';
 import { useInspectionCategories, useSaveReport, useInspection } from '../../hooks/useInspections';
 import { CONDITION_META, CONDITION_ORDER, conditionMeta } from '../../constants/inspection';
@@ -13,6 +14,7 @@ const WEIGHTS = { excellent: 100, good: 75, fair: 50, poor: 25 };
 const gradeFor = (s) => s == null ? '—' : s >= 85 ? 'A' : s >= 70 ? 'B' : s >= 55 ? 'C' : s >= 40 ? 'D' : 'E';
 
 const InspectionReportScreen = ({ route, navigation }) => {
+    const insets = useSafeAreaInsets();
     const { id } = route.params || {};
     const catsQuery = useInspectionCategories();
     const detailQuery = useInspection(id);
@@ -135,7 +137,7 @@ const InspectionReportScreen = ({ route, navigation }) => {
                         />
                     </ScrollView>
 
-                    <View style={styles.bottomBtn}>
+                    <View style={[styles.bottomBtn, { paddingBottom: insets.bottom + 12 }]}>
                         <TouchableOpacity
                             style={[styles.saveBtn, save.isPending && styles.saveBtnDisabled]}
                             onPress={handleSave}

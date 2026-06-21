@@ -6,6 +6,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import Toast from 'react-native-toast-message';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Fonts from '../../constants/fonts';
 import config from '../../config';
 import Input from '../../components/Input';
@@ -25,6 +26,7 @@ const SectionHeader = ({ icon, title }) => (
 );
 
 const EditProfileScreen = ({ navigation }) => {
+    const insets = useSafeAreaInsets();
     const storeUser = useUserStore(s => s.user);
     const { data: freshUser } = useMe();
     const user = freshUser || storeUser || {};
@@ -165,7 +167,7 @@ const EditProfileScreen = ({ navigation }) => {
                 />
             )}
 
-            <View style={styles.bottomBtns}>
+            <View style={[styles.bottomBtns, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>
                     <Text style={styles.cancelText}>Cancel</Text>
                 </TouchableOpacity>

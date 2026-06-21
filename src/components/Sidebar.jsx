@@ -8,23 +8,24 @@ import Fonts from '../constants/fonts';
 import {useApp} from '../context/AppContext';
 import useAuth from "../hooks/useAuth";
 import useUserStore from '../store/userStore';
+import { useServiceProviderMe } from '../hooks/useServices';
 
 
 const {width} = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.82;
 
 const NAV_ITEMS = [
-    {key: 'Home', label: 'Home', icon: 'home-outline'},
     {key: 'Rides', label: 'Rides', icon: 'car-outline'},
     {key: 'RideHistory', label: 'Ride History', icon: 'history'},
     {key: 'BuySell', label: 'Buy/Sell Cars', icon: 'tag-outline'},
-    {key: 'Chats', label: 'Inbox', icon: 'message-outline', badge: 8},
+    {key: 'Messages', label: 'Messages', icon: 'message-outline'},
 ];
 
 const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
     const {role, setRole} = useApp();
     const { logout } = useAuth();
     const user = useUserStore(s => s.user);
+    const { data: spProfile } = useServiceProviderMe();
 
     const isDriver = role === 'driver';
     const isActualDriver = user?.user_type === 'driver';
@@ -122,6 +123,18 @@ const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
                                 </TouchableOpacity>
                             );
                         })}
+
+                        {/* Service provider — register (or view profile if already one) */}
+                        <TouchableOpacity
+                            style={styles.navItem}
+                            onPress={() => handleNav('ServiceProviderRegister')}
+                            activeOpacity={0.7}
+                        >
+                            <Icon name="tools" size={22} color="#5D5F62" />
+                            <Text style={styles.navLabel}>
+                                {spProfile ? 'My Service Profile' : 'Become a Provider'}
+                            </Text>
+                        </TouchableOpacity>
                     </View>
 
                     {/* Bottom Section */}
