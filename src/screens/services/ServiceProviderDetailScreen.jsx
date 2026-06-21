@@ -74,15 +74,24 @@ const ServiceProviderDetailScreen = ({ navigation, route }) => {
                         )}
                     </ScrollView>
 
-                    <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
-                        <TouchableOpacity style={styles.callBtn} onPress={call} activeOpacity={0.85}>
-                            <Icon name="phone" size={18} color="#07163B" />
-                            <Text style={styles.callText}>Call</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.requestBtn} onPress={requestService} activeOpacity={0.85}>
-                            <Text style={styles.requestText}>Request Service</Text>
-                        </TouchableOpacity>
-                    </View>
+                    {p.is_mine ? (
+                        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+                            <View style={styles.mineNote}>
+                                <Icon name="information-outline" size={16} color="#92600B" />
+                                <Text style={styles.mineNoteText}>This is your own listing — you can’t book your own service.</Text>
+                            </View>
+                        </View>
+                    ) : (
+                        <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
+                            <TouchableOpacity style={styles.callBtn} onPress={call} activeOpacity={0.85}>
+                                <Icon name="phone" size={18} color="#07163B" />
+                                <Text style={styles.callText}>Call</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.requestBtn} onPress={requestService} activeOpacity={0.85}>
+                                <Text style={styles.requestText}>Request Service</Text>
+                            </TouchableOpacity>
+                        </View>
+                    )}
                 </>
             )}
         </View>
@@ -129,6 +138,12 @@ const styles = StyleSheet.create({
     callText: { fontSize: 15, fontFamily: Fonts.semiBold, color: '#07163B' },
     requestBtn: { flex: 1, backgroundColor: '#FFD400', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
     requestText: { fontSize: 15, fontFamily: Fonts.semiBold, color: '#111111' },
+    mineNote: {
+        flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
+        backgroundColor: '#FFF8E1', borderWidth: 1, borderColor: '#FCE7A0',
+        borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13,
+    },
+    mineNoteText: { flex: 1, fontSize: 12.5, fontFamily: Fonts.medium, color: '#92600B', lineHeight: 18 },
 });
 
 export default ServiceProviderDetailScreen;

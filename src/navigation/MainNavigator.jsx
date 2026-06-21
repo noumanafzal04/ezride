@@ -7,7 +7,7 @@ import { useChatUnread } from '../hooks/useChat';
 import { useUserRealtime, useRealtimeConnected } from '../hooks/useRealtime';
 import HomeScreen from '../screens/HomeScreen';
 import ChatsScreen from '../screens/chat/ChatsScreen';
-import MarketplaceScreen from '../screens/buysell/MarketplaceScreen';
+import ServicesScreen from '../screens/services/ServicesScreen';
 
 // User
 import MyBookingsScreen from '../screens/user/MyBookingsScreen';
@@ -38,7 +38,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     Home: isFocused ? 'home' : 'home-outline',
                     Rides: isFocused ? 'car' : 'car-outline',
                     Post: 'plus',
-                    BuySell: isFocused ? 'tag' : 'tag-outline',
+                    Services: isFocused ? 'wrench' : 'wrench-outline',
                     Messages: isFocused ? 'message' : 'message-outline',
                 };
 
@@ -46,7 +46,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                     Home: 'Home',
                     Rides: 'Rides',
                     Post: '',
-                    BuySell: 'Buy/Sell',
+                    Services: 'Services',
                     Messages: 'Messages',
                 };
 
@@ -56,8 +56,8 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
                 };
 
                 if (isCenter) {
-                    // Driver → post a ride (+). Rider → find a ride (search).
-                    const goCenter = () => (isDriver ? navigation.navigate('Post') : navigation.navigate('AvailableRides'));
+                    // Driver → post a ride (+). User → open Discover (all modules).
+                    const goCenter = () => (isDriver ? navigation.navigate('Post') : navigation.navigate('Discover'));
                     return (
                         <TouchableOpacity key={route.key} style={styles.centerBtn} onPress={goCenter} activeOpacity={0.85}>
                             <View style={styles.centerCircle}>
@@ -102,7 +102,7 @@ const MainNavigator = () => {
             <Tab.Screen name="Home" component={HomeScreen} />
             <Tab.Screen name="Rides" component={RidesScreen} />
             <Tab.Screen name="Post" component={PostRideScreen} />
-            <Tab.Screen name="BuySell" component={MarketplaceScreen} />
+            <Tab.Screen name="Services" component={ServicesScreen} />
             <Tab.Screen name="Messages" component={ChatsScreen} />
         </Tab.Navigator>
     );
@@ -114,9 +114,11 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
         borderTopWidth: 1,
         borderTopColor: '#F0F0F0',
+        borderTopLeftRadius: 22,
+        borderTopRightRadius: 22,
         alignItems: 'center',
-        paddingTop: 10,
-        paddingBottom: 36, // ← add this
+        paddingTop: 12,
+        paddingBottom: 36,
         elevation: 12,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: -3 },

@@ -5,7 +5,6 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
-import useMe from '../../hooks/useMe';
 
 const SECTIONS = [
     {
@@ -44,7 +43,6 @@ const SECTIONS = [
 
 const SettingsScreen = ({navigation}) => {
     const [toggles, setToggles] = useState({notifications: true, location: true});
-    const {data: me} = useMe();
 
     const toggle = (key) => setToggles(prev => ({...prev, [key]: !prev[key]}));
 
@@ -110,26 +108,6 @@ const SettingsScreen = ({navigation}) => {
                         </View>
                     </View>
                 ))}
-
-                {/* Admin (only for is_admin accounts — in-app testing tool) */}
-                {me?.is_admin && (
-                    <View style={styles.section}>
-                        <Text style={styles.sectionTitle}>Admin</Text>
-                        <View style={styles.sectionCard}>
-                            <TouchableOpacity
-                                style={styles.settingRow}
-                                onPress={() => navigation.navigate('AdminInspections')}
-                                activeOpacity={0.7}
-                            >
-                                <View style={styles.settingIconBox}>
-                                    <Icon name="clipboard-check-outline" size={18} color="#07163B"/>
-                                </View>
-                                <Text style={styles.settingLabel}>Inspection Requests</Text>
-                                <Icon name="chevron-right" size={18} color="#AAAAAA"/>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                )}
 
                 {/* Logout */}
                 <View style={styles.section}>
@@ -198,6 +176,20 @@ const styles = StyleSheet.create({
     },
     settingLabel: {flex: 1, fontSize: 14, fontFamily: Fonts.medium, color: '#202223'},
     settingValue: {fontSize: 13, fontFamily: Fonts.regular, color: '#AAAAAA'},
+
+    serverBox: {padding: 16, gap: 10},
+    serverLabel: {fontSize: 13, fontFamily: Fonts.semiBold, color: '#202223'},
+    serverInput: {
+        borderWidth: 1, borderColor: '#D7DBDE', borderRadius: 10,
+        paddingHorizontal: 12, paddingVertical: 11, backgroundColor: '#FFFFFF',
+        fontFamily: Fonts.regular, fontSize: 13, color: '#07163B',
+    },
+    serverRow: {flexDirection: 'row', gap: 10},
+    serverSave: {flex: 1, backgroundColor: '#FFD400', borderRadius: 10, paddingVertical: 12, alignItems: 'center'},
+    serverSaveText: {fontSize: 14, fontFamily: Fonts.semiBold, color: '#111111'},
+    serverReset: {paddingHorizontal: 18, borderWidth: 1.5, borderColor: '#D7DBDE', borderRadius: 10, paddingVertical: 12, alignItems: 'center', justifyContent: 'center'},
+    serverResetText: {fontSize: 14, fontFamily: Fonts.semiBold, color: '#5D5F62'},
+    serverHint: {fontSize: 11.5, fontFamily: Fonts.regular, color: '#9AA0A6', lineHeight: 16},
 
     version: {
         textAlign: 'center', fontSize: 12,

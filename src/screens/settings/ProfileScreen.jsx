@@ -111,7 +111,7 @@ const ProfileScreen = ({ navigation }) => {
                     ) : (
                         <View style={styles.roleChip}>
                             <Icon name="account-outline" size={13} color="#5D5F62" />
-                            <Text style={styles.roleChipText}>Rider</Text>
+                            <Text style={styles.roleChipText}>User</Text>
                         </View>
                     )}
 

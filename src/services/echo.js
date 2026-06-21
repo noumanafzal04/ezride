@@ -2,27 +2,29 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js/react-native';
 import config from '../config';
 import useAuthStore from '../store/authStore';
+import useConfigStore from '../store/configStore';
 
 // laravel-echo expects a global Pusher client (Reverb speaks the Pusher protocol)
 global.Pusher = Pusher;
 
-// Host is taken from BASE_URL so it always matches your server.
-const host = config.BASE_URL.replace(/^https?:\/\//, '').split(/[:/]/)[0];
-
 let echoInstance = null;
 let echoToken = null;
+let echoHost = null;
 
 // Lazily create a single Echo connection authenticated with the current token.
-// Recreates itself when the token changes (login/logout) so private-channel
-// auth always uses a fresh token.
+// Recreates itself when the token OR the server URL changes (login/logout /
+// IP change) so it always points at the right host with a fresh token.
 export const getEcho = () => {
     const token = useAuthStore.getState().token;
+    const baseUrl = useConfigStore.getState().baseUrl;
+    const host = baseUrl.replace(/^https?:\/\//, '').split(/[:/]/)[0];
 
-    if (echoInstance && echoToken === token) return echoInstance;
+    if (echoInstance && echoToken === token && echoHost === host) return echoInstance;
     if (echoInstance) {
         try { echoInstance.disconnect(); } catch (e) { /* noop */ }
     }
     echoToken = token;
+    echoHost = host;
 
     echoInstance = new Echo({
         broadcaster: 'reverb',
@@ -32,7 +34,7 @@ export const getEcho = () => {
         wssPort: config.REVERB_PORT,
         forceTLS: config.REVERB_SCHEME === 'wss',
         enabledTransports: ['ws', 'wss'],
-        authEndpoint: `${config.BASE_URL}broadcasting/auth`,
+        authEndpoint: `${baseUrl}broadcasting/auth`,
         auth: { headers: { Authorization: token ? `Bearer ${token}` : '' } },
     });
 

@@ -5,6 +5,12 @@
 		},
 		{
 			"path": "../../../ezride-backend/Ride-App-Backend"
+		},
+		{
+			"path": "../../../ezride-backend/ez-ride-admin-portal"
+		},
+		{
+			"path": "../../../ez-ride-admin-panel"
 		}
 	],
 	"settings": {}

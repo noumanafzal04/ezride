@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import Toast from 'react-native-toast-message';
 import { getEcho } from '../services/echo';
 import useUserStore from '../store/userStore';
 
@@ -40,7 +41,16 @@ export const useUserRealtime = () => {
         let channel;
         try {
             channel = getEcho().private(`user.${userId}`);
-            channel.listen('.notification.created', () => {
+            channel.listen('.notification.created', (payload) => {
+                // Surface a visible toast so the user actually sees it (badge alone is easy to miss).
+                if (payload?.title || payload?.message) {
+                    Toast.show({
+                        type: 'info',
+                        text1: payload.title || 'Notification',
+                        text2: payload.message || undefined,
+                        visibilityTime: 4000,
+                    });
+                }
                 // Bump the badge instantly (no refetch round-trip), then reconcile.
                 qc.setQueryData(['notifications-unread'], (n) => (Number(n) || 0) + 1);
                 qc.invalidateQueries({ queryKey: ['notifications'] });

@@ -27,12 +27,14 @@ const ServicesScreen = ({ navigation }) => {
         <View style={styles.root}>
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Icon name="arrow-left" size={24} color="#07163B" />
-                </TouchableOpacity>
+                {navigation.canGoBack() ? (
+                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerSide}>
+                        <Icon name="arrow-left" size={24} color="#07163B" />
+                    </TouchableOpacity>
+                ) : <View style={styles.headerSide} />}
                 <Text style={styles.headerTitle}>Car Services</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('MyServiceRequests')}>
-                    <Text style={styles.headerLink}>My requests</Text>
+                <TouchableOpacity onPress={() => navigation.navigate('MyServiceRequests')} style={styles.headerSide}>
+                    <Text style={styles.headerLink}>Requests</Text>
                 </TouchableOpacity>
             </View>
 
@@ -61,7 +63,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: '#EAEDEE',
     },
     headerTitle: { fontSize: 17, fontFamily: Fonts.semiBold, color: '#07163B' },
-    headerLink: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#1D6AFF' },
+    headerSide: { minWidth: 64, justifyContent: 'center' },
+    headerLink: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#1D6AFF', textAlign: 'right' },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
     grid: { padding: 12 },

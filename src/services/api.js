@@ -1,25 +1,29 @@
 import axios from 'axios';
 import useAuthStore from '../store/authStore';
 import useUserStore from '../store/userStore';
+import useConfigStore from '../store/configStore';
 import config from '../config';
 import { resetToLogin } from '../navigation/navigationRef';
 
 const api = axios.create({
     baseURL: config.BASE_URL,
+    // Fail fast instead of hanging forever when the server is unreachable.
+    timeout: 20000,
     headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
     },
 });
 
-// Inject Bearer token on every request
+// Use the runtime server URL + inject Bearer token on every request.
 api.interceptors.request.use(
-    (config) => {
+    (cfg) => {
+        cfg.baseURL = useConfigStore.getState().baseUrl;
         const token = useAuthStore.getState().token;
         if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
+            cfg.headers.Authorization = `Bearer ${token}`;
         }
-        return config;
+        return cfg;
     },
     (error) => Promise.reject(error)
 );

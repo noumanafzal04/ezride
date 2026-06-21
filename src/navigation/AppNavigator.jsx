@@ -9,6 +9,7 @@ import LoginScreen from '../screens/auth/LoginScreen';
 import OTPScreen from '../screens/auth/OTPScreen';
 import SignupScreen from '../screens/auth/SignupScreen';
 import MainNavigator from './MainNavigator';
+import DiscoverScreen from '../screens/DiscoverScreen';
 import ProfileScreen from '../screens/settings/ProfileScreen';
 import EditProfileScreen from '../screens/settings/EditProfileScreen';
 import PostRideScreen from '../screens/driver/PostRideScreen';
@@ -30,8 +31,6 @@ import DriverOnboardingScreen from '../screens/driver/DriverOnboardingScreen';
 import InspectionRequestScreen from '../screens/inspection/InspectionRequestScreen';
 import MyInspectionsScreen from '../screens/inspection/MyInspectionsScreen';
 import InspectionDetailScreen from '../screens/inspection/InspectionDetailScreen';
-import AdminInspectionsScreen from '../screens/inspection/AdminInspectionsScreen';
-import InspectionReportScreen from '../screens/inspection/InspectionReportScreen';
 import TrackInspectionScreen from '../screens/inspection/TrackInspectionScreen';
 import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import ServiceProviderRegisterScreen from '../screens/services/ServiceProviderRegisterScreen';
@@ -56,6 +55,7 @@ const AppNavigator = () => {
                 <Stack.Screen name="Signup" component={SignupScreen}/>
 
                 <Stack.Screen name="Main" component={MainNavigator}/>
+                <Stack.Screen name="Discover" component={DiscoverScreen}/>
                 <Stack.Screen name="Profile" component={ProfileScreen}/>
                 <Stack.Screen name="EditProfile" component={EditProfileScreen}/>
 
@@ -82,8 +82,6 @@ const AppNavigator = () => {
                 <Stack.Screen name="InspectionRequest" component={InspectionRequestScreen}/>
                 <Stack.Screen name="MyInspections" component={MyInspectionsScreen}/>
                 <Stack.Screen name="InspectionDetail" component={InspectionDetailScreen}/>
-                <Stack.Screen name="AdminInspections" component={AdminInspectionsScreen}/>
-                <Stack.Screen name="InspectionReport" component={InspectionReportScreen}/>
                 <Stack.Screen name="TrackInspection" component={TrackInspectionScreen}/>
                 <Stack.Screen name="Notifications" component={NotificationsScreen}/>
                 <Stack.Screen name="ServiceProviderRegister" component={ServiceProviderRegisterScreen}/>

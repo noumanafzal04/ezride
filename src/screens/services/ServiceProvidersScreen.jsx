@@ -33,7 +33,10 @@ const ServiceProvidersScreen = ({ navigation, route }) => {
             >
                 <View style={styles.avatar}><Text style={styles.avatarInitial}>{(item.business_name?.[0] || '?').toUpperCase()}</Text></View>
                 <View style={styles.cardBody}>
-                    <Text style={styles.bizName} numberOfLines={1}>{item.business_name}</Text>
+                    <View style={styles.nameRow}>
+                        <Text style={styles.bizName} numberOfLines={1}>{item.business_name}</Text>
+                        {item.is_mine && <View style={styles.mineTag}><Text style={styles.mineTagText}>Your listing</Text></View>}
+                    </View>
                     <View style={styles.metaRow}>
                         {!!item.city?.name && (<><Icon name="map-marker-outline" size={12} color="#9AA0A6" /><Text style={styles.meta}>{item.city.name}</Text></>)}
                         {rating && (<><Icon name="star" size={12} color="#FFC107" /><Text style={styles.meta}>{rating}</Text></>)}
@@ -132,7 +135,10 @@ const styles = StyleSheet.create({
     avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#FFF4C2', alignItems: 'center', justifyContent: 'center' },
     avatarInitial: { fontSize: 18, fontFamily: Fonts.bold, color: '#07163B' },
     cardBody: { flex: 1, gap: 3 },
-    bizName: { fontSize: 14.5, fontFamily: Fonts.semiBold, color: '#202223' },
+    nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    bizName: { flexShrink: 1, fontSize: 14.5, fontFamily: Fonts.semiBold, color: '#202223' },
+    mineTag: { backgroundColor: '#FFF4C2', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+    mineTagText: { fontSize: 10, fontFamily: Fonts.semiBold, color: '#92600B' },
     metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
     meta: { fontSize: 12, fontFamily: Fonts.regular, color: '#9AA0A6' },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 },

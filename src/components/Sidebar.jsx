@@ -15,9 +15,11 @@ const {width} = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.82;
 
 const NAV_ITEMS = [
+    {key: 'Discover', label: 'Discover', icon: 'compass-outline'},
     {key: 'Rides', label: 'Rides', icon: 'car-outline'},
     {key: 'RideHistory', label: 'Ride History', icon: 'history'},
-    {key: 'BuySell', label: 'Buy/Sell Cars', icon: 'tag-outline'},
+    {key: 'Services', label: 'Car Services', icon: 'wrench-outline'},
+    {key: 'Marketplace', label: 'Buy/Sell Cars', icon: 'tag-outline'},
     {key: 'Messages', label: 'Messages', icon: 'message-outline'},
 ];
 
@@ -91,7 +93,7 @@ const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
                                 style={[styles.roleBtn, isDriver && styles.roleBtnInactive]}
                                 onPress={() => switchRole('rider')}
                             >
-                                <Text style={[styles.roleText, isDriver && styles.roleTextInactive]}>Passenger</Text>
+                                <Text style={[styles.roleText, isDriver && styles.roleTextInactive]}>User</Text>
                             </TouchableOpacity>
                         </View>
                     )}

@@ -9,8 +9,8 @@ import { useApp } from '../../context/AppContext';
 const ROLES = [
     {
         id: 'rider',
-        label: "I'm a Rider",
-        desc: 'Book rides and reach your destination quickly and safely.',
+        label: "I'm a User",
+        desc: 'Book rides, services, inspections and more.',
         icon: 'map-marker-account',
     },
     {

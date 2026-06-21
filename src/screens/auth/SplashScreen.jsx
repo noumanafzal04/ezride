@@ -4,6 +4,7 @@ import Colors from '../../constants/colors';
 import Fonts from '../../constants/fonts';
 import useAuthStore from '../../store/authStore';
 import useUserStore from '../../store/userStore';
+import useConfigStore from '../../store/configStore';
 import authService from '../../services/authService';
 import { useApp } from '../../context/AppContext';
 
@@ -14,6 +15,9 @@ const SplashScreen = ({ navigation }) => {
         const bootstrap = async () => {
             // Minimum splash time runs concurrently with the async work below
             const minDelay = new Promise(res => setTimeout(res, 1500));
+
+            // Load the saved server URL FIRST so every API call uses the right host
+            await useConfigStore.getState().restoreConfig();
 
             // Restore token + cached user from AsyncStorage
             await useAuthStore.getState().restoreAuth();
@@ -29,19 +33,19 @@ const SplashScreen = ({ navigation }) => {
                 const cached = useUserStore.getState().user;
                 if (cached?.user_type) setRole(cached.user_type);
 
-                // Refresh the user from the server so cached data isn't stale.
-                try {
-                    const res = await authService.me();
-                    const fresh = res.data?.data?.user || res.data?.data;
-                    if (fresh) {
-                        useUserStore.getState().setUser(fresh);
-                        if (fresh.user_type) setRole(fresh.user_type);
-                    }
-                } catch {
-                    // On 401 the interceptor clears auth → fall back to Login.
-                    // On network error keep the cached user and proceed.
-                    if (!useAuthStore.getState().token) destination = 'Login';
-                }
+                // Refresh the user from the server in the BACKGROUND — never block the
+                // splash on it. If the server is unreachable the request must not hang
+                // the app on this screen; a 401 is handled by the axios interceptor
+                // (clears auth → resets to Login).
+                authService.me()
+                    .then((res) => {
+                        const fresh = res.data?.data?.user || res.data?.data;
+                        if (fresh) {
+                            useUserStore.getState().setUser(fresh);
+                            if (fresh.user_type) setRole(fresh.user_type);
+                        }
+                    })
+                    .catch(() => { /* keep cached user; interceptor handles 401 */ });
             }
 
             await minDelay;
