@@ -8,6 +8,7 @@ const chatService = {
     markRead: (id) => api.post(`/conversations/${id}/read`),
     byBooking: (bookingId) => api.get(`/conversations/by-booking/${bookingId}`),
     byServiceBooking: (serviceBookingId) => api.get(`/conversations/by-service-booking/${serviceBookingId}`),
+    byListing: (listingId) => api.get(`/conversations/by-listing/${listingId}`),
 };
 
 export default chatService;

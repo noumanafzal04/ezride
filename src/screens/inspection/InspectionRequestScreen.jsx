@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     StatusBar, TextInput, Platform,
@@ -9,6 +9,7 @@ import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Fonts from '../../constants/fonts';
 import { useCities } from '../../hooks/useLookup';
+import { useCurrentLocation } from '../../hooks/useLocation';
 import useMe from '../../hooks/useMe';
 import { useSubmitInspection } from '../../hooks/useInspections';
 import SelectSheet from '../../components/SelectSheet';
@@ -38,6 +39,16 @@ const InspectionRequestScreen = ({ navigation }) => {
 
     const [city, setCity]       = useState(null);
     const [address, setAddress] = useState('');
+
+    // Prefill the city from the user's current location (once) — they can still change it.
+    const { city: currentCity } = useCurrentLocation();
+    const cityPrefilled = useRef(false);
+    useEffect(() => {
+        if (!cityPrefilled.current && !city && currentCity?.id) {
+            setCity({ id: currentCity.id, name: currentCity.name });
+            cityPrefilled.current = true;
+        }
+    }, [currentCity, city]);
     const [preferredAt, setPreferredAt] = useState(null);
     const [notes, setNotes]     = useState('');
 

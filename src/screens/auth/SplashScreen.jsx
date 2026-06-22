@@ -5,6 +5,7 @@ import Fonts from '../../constants/fonts';
 import useAuthStore from '../../store/authStore';
 import useUserStore from '../../store/userStore';
 import useConfigStore from '../../store/configStore';
+import useLocationStore from '../../store/locationStore';
 import authService from '../../services/authService';
 import { useApp } from '../../context/AppContext';
 
@@ -19,9 +20,10 @@ const SplashScreen = ({ navigation }) => {
             // Load the saved server URL FIRST so every API call uses the right host
             await useConfigStore.getState().restoreConfig();
 
-            // Restore token + cached user from AsyncStorage
+            // Restore token + cached user + saved location from AsyncStorage
             await useAuthStore.getState().restoreAuth();
             await useUserStore.getState().restoreUser();
+            await useLocationStore.getState().restore();
 
             const { token, isFullyAuthenticated } = useAuthStore.getState();
             let destination = 'Login';

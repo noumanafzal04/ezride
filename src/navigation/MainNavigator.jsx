@@ -5,6 +5,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useApp } from '../context/AppContext';
 import { useChatUnread } from '../hooks/useChat';
 import { useUserRealtime, useRealtimeConnected } from '../hooks/useRealtime';
+import { useLocationWatch } from '../hooks/useLocation';
+import LocationPrompt from '../components/LocationPrompt';
 import HomeScreen from '../screens/HomeScreen';
 import ChatsScreen from '../screens/chat/ChatsScreen';
 import ServicesScreen from '../screens/services/ServicesScreen';
@@ -96,15 +98,20 @@ const MainNavigator = () => {
     // Live updates for the whole authenticated session (booking status,
     // notifications, ride alerts) over the user's private WebSocket channel.
     useUserRealtime();
+    // Detect current city; ask before switching if it changed.
+    useLocationWatch();
 
     return (
-        <Tab.Navigator tabBar={props => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
-            <Tab.Screen name="Home" component={HomeScreen} />
-            <Tab.Screen name="Rides" component={RidesScreen} />
-            <Tab.Screen name="Post" component={PostRideScreen} />
-            <Tab.Screen name="Services" component={ServicesScreen} />
-            <Tab.Screen name="Messages" component={ChatsScreen} />
-        </Tab.Navigator>
+        <>
+            <Tab.Navigator tabBar={props => <CustomTabBar {...props} />} screenOptions={{ headerShown: false }}>
+                <Tab.Screen name="Home" component={HomeScreen} />
+                <Tab.Screen name="Rides" component={RidesScreen} />
+                <Tab.Screen name="Post" component={PostRideScreen} />
+                <Tab.Screen name="Services" component={ServicesScreen} />
+                <Tab.Screen name="Messages" component={ChatsScreen} />
+            </Tab.Navigator>
+            <LocationPrompt />
+        </>
     );
 };
 

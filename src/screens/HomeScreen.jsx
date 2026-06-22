@@ -8,17 +8,31 @@ import {useFocusEffect} from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../constants/fonts';
 import Sidebar from '../components/Sidebar';
+import useUserStore from '../store/userStore';
+import { useApp } from '../context/AppContext';
 import { useUnreadCount } from '../hooks/useNotifications';
 import { useServiceCategories } from '../hooks/useServices';
+import { useAvailableRides } from '../hooks/useAvailableRides';
+import { useCarListings } from '../hooks/useMarketplace';
+import { useCurrentLocation } from '../hooks/useLocation';
+import { fileUrl } from '../utils/media';
 
 const {width} = Dimensions.get('window');
 const CARD_WIDTH = width - 40; // 20px margin each side
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
 
-const ACTIONS = [
+// Quick actions differ by role — only drivers post rides.
+const USER_ACTIONS = [
     {key: 'find', icon: 'magnify', label: 'Find Ride', route: 'AvailableRides'},
+    {key: 'services', icon: 'wrench-outline', label: 'Services', route: 'Services'},
+    {key: 'inspect', icon: 'car-wrench', label: 'Inspect', route: 'InspectionRequest'},
+    {key: 'buysell', icon: 'tag-outline', label: 'Buy / Sell', route: 'Marketplace'},
+    {key: 'history', icon: 'clock-outline', label: 'History', route: 'History'},
+];
+const DRIVER_ACTIONS = [
     {key: 'post', icon: 'plus-circle-outline', label: 'Post Ride', route: 'PostRide'},
+    {key: 'find', icon: 'magnify', label: 'Find Ride', route: 'AvailableRides'},
     {key: 'inspect', icon: 'car-wrench', label: 'Inspect', route: 'InspectionRequest'},
     {key: 'buysell', icon: 'tag-outline', label: 'Buy / Sell', route: 'Marketplace'},
     {key: 'history', icon: 'clock-outline', label: 'History', route: 'History'},
@@ -60,26 +74,38 @@ const BANNERS = [
     },
 ];
 
-const SERVICES = [
-    {key: 's1', icon: 'wrench-outline', label: 'Mechanic', bg: '#EEF5FF', ic: '#2563EB'},
-    {key: 's2', icon: 'car-wash', label: 'Car Wash', bg: '#EDFFF4', ic: '#16A34A'},
-    {key: 's3', icon: 'tire', label: 'Tyre Shop', bg: '#FFFBEB', ic: '#D97706'},
-    {key: 's4', icon: 'fuel', label: 'Fuel', bg: '#FFF1F2', ic: '#E11D48'},
-    {key: 's5', icon: 'car-battery', label: 'Battery', bg: '#F3EEFF', ic: '#7C3AED'},
-    {key: 's6', icon: 'tools', label: 'Detailing', bg: '#FFF7ED', ic: '#EA580C'},
-];
-
-const UPCOMING = [
-    {from: 'Lahore', to: 'Islamabad', time: 'Today · 9:00 AM', price: 'Rs. 2,600', seats: 3},
-    {from: 'Islamabad', to: 'Karachi', time: 'Tomorrow · 11:00 AM', price: 'Rs. 4,800', seats: 2},
-];
+// Format a ride post's departure for the Home "rides near you" cards.
+const fmtRideTime = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
+};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 const HomeScreen = ({navigation}) => {
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const { role } = useApp();
+    const isDriver = role === 'driver';
+    const actions = isDriver ? DRIVER_ACTIONS : USER_ACTIONS;
+
+    const user = useUserStore(s => s.user);
+    const greetName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'there';
+    const greeting = (() => { const h = new Date().getHours(); return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; })();
+
     const { data: notifUnread = 0 } = useUnreadCount();
     const { data: serviceCats = [] } = useServiceCategories();
+    const { city } = useCurrentLocation();
+
+    // Rides near the user (location-ranked: their city first, else nearest).
+    const ridesQuery = useAvailableRides({});
+    const nearbyRides = (ridesQuery.data?.pages?.[0]?.ride_posts || []).slice(0, 3);
+
+    // Featured car listings (location-ranked).
+    const listingsQuery = useCarListings({});
+    const featuredCars = (listingsQuery.data?.pages?.[0]?.listings || []).slice(0, 6);
+
     const [activeBanner, setActiveBanner] = useState(0);
     const bannerRef = useRef(null);
     const lastBack = useRef(0);
@@ -133,8 +159,8 @@ const HomeScreen = ({navigation}) => {
                 {/* ── GREETING + WALLET ── */}
                 <View style={styles.greetRow}>
                     <View>
-                        <Text style={styles.greetSub}>Good morning 👋</Text>
-                        <Text style={styles.greetName}>Nouman Afzal</Text>
+                        <Text style={styles.greetSub}>{greeting} 👋</Text>
+                        <Text style={styles.greetName}>{greetName}</Text>
                     </View>
                     <TouchableOpacity
                         style={styles.walletChip}
@@ -150,7 +176,7 @@ const HomeScreen = ({navigation}) => {
 
                 {/* ── QUICK ACTIONS ── */}
                 <View style={styles.actionsRow}>
-                    {ACTIONS.map(a => (
+                    {actions.map(a => (
                         <TouchableOpacity
                             key={a.key}
                             style={styles.actionItem}
@@ -165,7 +191,7 @@ const HomeScreen = ({navigation}) => {
                     ))}
                 </View>
 
-                {/* ── CAR SERVICES ── */}
+                {/* ── CAR SERVICES (clean 2-row grid of 8) ── */}
                 {serviceCats.length > 0 && (
                     <View style={styles.svcSection}>
                         <View style={styles.svcHead}>
@@ -174,25 +200,21 @@ const HomeScreen = ({navigation}) => {
                                 <Text style={styles.svcSeeAll}>See all</Text>
                             </TouchableOpacity>
                         </View>
-                        <FlatList
-                            data={serviceCats.slice(0, 8)}
-                            keyExtractor={c => String(c.id)}
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.svcRow}
-                            renderItem={({ item: c }) => (
+                        <View style={styles.svcGrid}>
+                            {serviceCats.slice(0, 8).map(c => (
                                 <TouchableOpacity
-                                    style={styles.svcItem}
+                                    key={c.id}
+                                    style={styles.svcTile}
                                     activeOpacity={0.7}
                                     onPress={() => navigation.navigate('ServiceProviders', { category: c })}
                                 >
-                                    <View style={styles.svcIcon}>
-                                        <Icon name={c.icon || 'wrench'} size={22} color="#07163B" />
+                                    <View style={styles.svcTileIcon}>
+                                        <Icon name={c.icon || 'wrench'} size={21} color="#07163B" />
                                     </View>
-                                    <Text style={styles.svcLabel} numberOfLines={1}>{c.name}</Text>
+                                    <Text style={styles.svcTileLabel} numberOfLines={1}>{c.name}</Text>
                                 </TouchableOpacity>
-                            )}
-                        />
+                            ))}
+                        </View>
                     </View>
                 )}
 
@@ -285,34 +307,6 @@ const HomeScreen = ({navigation}) => {
                     </View>
                 </View>
 
-                {/* ── CAR SERVICES ── */}
-                <View style={styles.section}>
-                    <View style={styles.sectionHead}>
-                        <Text style={styles.sectionTitle}>Car Services</Text>
-                        <TouchableOpacity><Text style={styles.seeAll}>See all</Text></TouchableOpacity>
-                    </View>
-                    <Text style={styles.sectionSub}>Find trusted pros near you</Text>
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.servicesRow}
-                    >
-                        {SERVICES.map(s => (
-                            <TouchableOpacity key={s.key} style={styles.serviceItem} activeOpacity={0.75}>
-                                <View style={[styles.serviceIcon, {backgroundColor: s.bg}]}>
-                                    <Icon name={s.icon} size={23} color={s.ic}/>
-                                </View>
-                                <Text style={styles.serviceLabel}>{s.label}</Text>
-                            </TouchableOpacity>
-                        ))}
-                        <TouchableOpacity style={styles.serviceItem} activeOpacity={0.75}>
-                            <View style={styles.serviceIconAdd}>
-                                <Icon name="plus" size={18} color="#CCCCCC"/>
-                            </View>
-                            <Text style={styles.serviceLabel}>{'Offer\nService'}</Text>
-                        </TouchableOpacity>
-                    </ScrollView>
-                </View>
 
                 {/* ── BUY / SELL FEATURED ── */}
                 <View style={styles.section}>
@@ -322,32 +316,39 @@ const HomeScreen = ({navigation}) => {
                             <Text style={styles.seeAll}>See all</Text>
                         </TouchableOpacity>
                     </View>
-                    <Text style={styles.sectionSub}>Featured listings near you</Text>
-                    <ScrollView
-                        horizontal
-                        showsHorizontalScrollIndicator={false}
-                        contentContainerStyle={styles.carsRow}
-                    >
-                        {[
-                            {name: 'Honda City 2021', price: 'Rs. 32 Lac', km: '45,000 km', tag: 'Verified', image: 'https://images.unsplash.com/photo-1606664515524-ed2f786a0bd6?w=400&q=80'},
-                            {name: 'Toyota Corolla 2020', price: 'Rs. 48 Lac', km: '38,000 km', tag: 'Featured', image: 'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?w=400&q=80'},
-                            {name: 'Suzuki Alto 2022', price: 'Rs. 22 Lac', km: '12,000 km', tag: 'New', image: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?w=400&q=80'},
-                        ].map((car, i) => (
-                            <TouchableOpacity key={i} style={styles.carCard} activeOpacity={0.85}>
-                                <View style={styles.carImageBox}>
-                                    <Image source={{uri: car.image}} style={styles.carImage} resizeMode="cover"/>
-                                    <View style={styles.carTag}>
-                                        <Text style={styles.carTagText}>{car.tag}</Text>
-                                    </View>
-                                </View>
-                                <View style={styles.carInfo}>
-                                    <Text style={styles.carName}>{car.name}</Text>
-                                    <Text style={styles.carKm}>{car.km}</Text>
-                                    <Text style={styles.carPrice}>{car.price}</Text>
-                                </View>
-                            </TouchableOpacity>
-                        ))}
-                    </ScrollView>
+                    <Text style={styles.sectionSub}>{city?.name ? `Cars near ${city.name}` : 'Listings near you'}</Text>
+                    {featuredCars.length === 0 ? (
+                        <TouchableOpacity style={styles.carEmpty} activeOpacity={0.85} onPress={() => navigation.navigate('Marketplace')}>
+                            <Icon name="car-outline" size={22} color="#AAAAAA" />
+                            <Text style={styles.carEmptyText}>No cars listed yet — be the first to sell.</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.carsRow}>
+                            {featuredCars.map((car) => {
+                                const img = fileUrl(car.primary_image);
+                                const tag = car.is_managed ? 'EZRide' : car.is_inspected ? `Grade ${car.inspection?.grade}` : null;
+                                return (
+                                    <TouchableOpacity key={car.id} style={styles.carCard} activeOpacity={0.85}
+                                        onPress={() => navigation.navigate('CarDetail', { id: car.id })}>
+                                        <View style={styles.carImageBox}>
+                                            {img ? <Image source={{uri: img}} style={styles.carImage} resizeMode="cover"/>
+                                                : <Icon name="car" size={30} color="#CBD0D6" />}
+                                            {tag && (
+                                                <View style={[styles.carTag, car.is_inspected && !car.is_managed && {backgroundColor: '#109F2A'}]}>
+                                                    <Text style={[styles.carTagText, car.is_inspected && !car.is_managed && {color: '#FFFFFF'}]}>{tag}</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                        <View style={styles.carInfo}>
+                                            <Text style={styles.carName} numberOfLines={1}>{car.title}</Text>
+                                            <Text style={styles.carKm}>{car.mileage ? `${Number(car.mileage).toLocaleString()} km` : (car.city?.name || '—')}</Text>
+                                            <Text style={styles.carPrice}>{car.price != null ? `Rs. ${Number(car.price).toLocaleString()}` : 'On request'}</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    )}
                 </View>
 
                 {/* ── BOOK INSPECTION ── */}
@@ -356,7 +357,11 @@ const HomeScreen = ({navigation}) => {
                         <Text style={styles.sectionTitle}>Car Inspection</Text>
                     </View>
                     <Text style={styles.sectionSub}>Know exactly what you're buying</Text>
-                    <TouchableOpacity style={styles.inspectionCard} activeOpacity={0.85}>
+                    <TouchableOpacity
+                        style={styles.inspectionCard}
+                        activeOpacity={0.85}
+                        onPress={() => navigation.navigate('InspectionRequest')}
+                    >
                         <View style={styles.inspectionLeft}>
                             <View style={styles.inspectionIconWrap}>
                                 <Icon name="clipboard-check-outline" size={26} color="#2563EB"/>
@@ -372,40 +377,55 @@ const HomeScreen = ({navigation}) => {
                     </TouchableOpacity>
                 </View>
 
-                {/* ── UPCOMING RIDES ── */}
+                {/* ── RIDES NEAR YOU (location-ranked) ── */}
                 <View style={styles.section}>
                     <View style={styles.sectionHead}>
-                        <Text style={styles.sectionTitle}>Upcoming Rides</Text>
-                        <TouchableOpacity onPress={() => navigation.navigate('History')}>
+                        <Text style={styles.sectionTitle}>Rides near you</Text>
+                        <TouchableOpacity onPress={() => navigation.navigate('AvailableRides')}>
                             <Text style={styles.seeAll}>View all</Text>
                         </TouchableOpacity>
                     </View>
-                    {UPCOMING.map((ride, i) => (
-                        <View key={i} style={styles.rideCard}>
-                            <View style={styles.rideRoute}>
-                                <View style={styles.rideDotGreen}/>
-                                <View style={styles.rideLine}/>
-                                <View style={styles.rideDotNavy}/>
-                            </View>
-                            <View style={styles.rideCities}>
-                                <Text style={styles.rideCity}>{ride.from}</Text>
-                                <Text style={styles.rideCity}>{ride.to}</Text>
-                            </View>
-                            <View style={styles.rideMeta}>
-                                <Text style={styles.rideTime}>{ride.time}</Text>
-                                <View style={styles.rideSeatsRow}>
-                                    <Icon name="account-outline" size={11} color="#AAAAAA"/>
-                                    <Text style={styles.rideSeats}>{ride.seats} seats</Text>
-                                </View>
-                            </View>
-                            <View style={styles.rideRight}>
-                                <Text style={styles.ridePrice}>{ride.price}</Text>
-                                <TouchableOpacity style={styles.rideBookBtn}>
-                                    <Text style={styles.rideBookText}>Book</Text>
-                                </TouchableOpacity>
-                            </View>
+                    <Text style={styles.sectionSub}>
+                        {city?.name ? `Departing from ${city.name} & nearby` : 'Popular routes near you'}
+                    </Text>
+
+                    {ridesQuery.isLoading ? (
+                        <View style={styles.ridesEmpty}><Text style={styles.ridesEmptyText}>Finding rides…</Text></View>
+                    ) : nearbyRides.length === 0 ? (
+                        <View style={styles.ridesEmpty}>
+                            <Icon name="car-off" size={28} color="#DDDDDD" />
+                            <Text style={styles.ridesEmptyText}>No rides available right now.</Text>
                         </View>
-                    ))}
+                    ) : nearbyRides.map((ride) => {
+                        const seats = ride.post_type === 'private' ? null : ride.available_seats;
+                        return (
+                            <TouchableOpacity key={ride.id} style={styles.rideCard} activeOpacity={0.85}
+                                onPress={() => navigation.navigate('AvailableRides')}>
+                                <View style={styles.rideRoute}>
+                                    <View style={styles.rideDotGreen}/>
+                                    <View style={styles.rideLine}/>
+                                    <View style={styles.rideDotNavy}/>
+                                </View>
+                                <View style={styles.rideCities}>
+                                    <Text style={styles.rideCity} numberOfLines={1}>{ride.from?.city?.name || '—'}</Text>
+                                    <Text style={styles.rideCity} numberOfLines={1}>{ride.to?.city?.name || '—'}</Text>
+                                </View>
+                                <View style={styles.rideMeta}>
+                                    <Text style={styles.rideTime}>{fmtRideTime(ride.departure_at)}</Text>
+                                    <View style={styles.rideSeatsRow}>
+                                        <Icon name="account-outline" size={11} color="#AAAAAA"/>
+                                        <Text style={styles.rideSeats}>{seats != null ? `${seats} seats` : 'Private'}</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.rideRight}>
+                                    <Text style={styles.ridePrice}>Rs. {Number(ride.price_per_seat || 0).toLocaleString()}</Text>
+                                    <View style={styles.rideBookBtn}>
+                                        <Text style={styles.rideBookText}>Book</Text>
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    })}
                 </View>
 
             </ScrollView>
@@ -493,10 +513,14 @@ const styles = StyleSheet.create({
     svcHead: {flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginBottom: 12},
     svcTitle: {fontSize: 15, fontFamily: Fonts.semiBold, color: '#07163B'},
     svcSeeAll: {fontSize: 13, fontFamily: Fonts.semiBold, color: '#1D6AFF'},
-    svcRow: {paddingHorizontal: 16, gap: 16},
-    svcItem: {alignItems: 'center', gap: 6, width: 66},
-    svcIcon: {width: 54, height: 54, borderRadius: 27, backgroundColor: '#FFF4C2', alignItems: 'center', justifyContent: 'center'},
-    svcLabel: {fontSize: 10.5, fontFamily: Fonts.regular, color: '#202223', textAlign: 'center'},
+    svcGrid: {flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 14, rowGap: 16},
+    svcTile: {width: '25%', alignItems: 'center', gap: 7, paddingHorizontal: 4},
+    svcTileIcon: {
+        width: 52, height: 52, borderRadius: 15,
+        backgroundColor: '#F8F8F8', borderWidth: 1, borderColor: '#EAEDEE',
+        alignItems: 'center', justifyContent: 'center',
+    },
+    svcTileLabel: {fontSize: 10.5, fontFamily: Fonts.medium, color: '#5D5F62', textAlign: 'center'},
     actionIcon: {
         width: 50, height: 50, borderRadius: 14,
         backgroundColor: '#F8F8F8',
@@ -688,6 +712,8 @@ const styles = StyleSheet.create({
 
     // Cars
     carsRow: {paddingHorizontal: 20, gap: 12},
+    carEmpty: {marginHorizontal: 20, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAEDEE', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 18},
+    carEmptyText: {flex: 1, fontSize: 13, fontFamily: Fonts.regular, color: '#9AA0A6'},
     carCard: {
         width: 152,
         backgroundColor: '#FFFFFF',
@@ -778,6 +804,8 @@ const styles = StyleSheet.create({
         paddingVertical: 6,
     },
     rideBookText: {fontSize: 12, fontFamily: Fonts.semiBold, color: '#07163B'},
+    ridesEmpty: {alignItems: 'center', gap: 8, paddingVertical: 24, marginHorizontal: 20, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#EAEDEE'},
+    ridesEmptyText: {fontSize: 13, fontFamily: Fonts.regular, color: '#AAAAAA'},
 });
 
 export default HomeScreen;

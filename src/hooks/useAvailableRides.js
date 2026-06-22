@@ -1,16 +1,23 @@
 import { useQuery, useInfiniteQuery, useMutation } from '@tanstack/react-query';
 import rideService from '../services/rideService';
+import useLocationStore from '../store/locationStore';
 
 const PAGE_SIZE = 15;
 
-// Rider: browse available rides with infinite scroll (filters: from_city_id, to_city_id, date).
+// User: browse available rides with infinite scroll (filters: from_city_id, to_city_id, date).
 // Loads one page at a time and fetches the next on scroll — scales to any volume.
-export const useAvailableRides = (filters = {}, options = {}) =>
-    useInfiniteQuery({
-        queryKey: ['available-rides', filters],
+// With no from/to city filter, rides are ranked by distance from the user's
+// current location (still shows ALL rides — location only orders them).
+export const useAvailableRides = (filters = {}, options = {}) => {
+    const coords = useLocationStore((s) => s.coords);
+    const useNear = !!coords && !filters.from_city_id && !filters.to_city_id;
+    const near = useNear ? { near_lat: coords.lat, near_lng: coords.lng } : {};
+    const nearKey = useNear ? `${coords.lat.toFixed(2)},${coords.lng.toFixed(2)}` : 'no-loc';
+    return useInfiniteQuery({
+        queryKey: ['available-rides', filters, nearKey],
         queryFn: ({ pageParam = 1 }) =>
             rideService
-                .getAvailableRides({ ...filters, page: pageParam, limit: PAGE_SIZE })
+                .getAvailableRides({ ...filters, ...near, page: pageParam, limit: PAGE_SIZE })
                 .then(r => r.data?.data || {}),
         initialPageParam: 1,
         getNextPageParam: (lastPage) => {
@@ -22,6 +29,7 @@ export const useAvailableRides = (filters = {}, options = {}) =>
         staleTime: 60 * 1000,
         ...options,
     });
+};
 
 // Rider: poll for newly posted rides (drives the "new rides available" banner).
 // Cheap COUNT endpoint; polls every 25s only while the screen is focused and

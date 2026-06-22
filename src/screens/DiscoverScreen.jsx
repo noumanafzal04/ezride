@@ -7,6 +7,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import Fonts from '../constants/fonts';
 import { useServiceCategories } from '../hooks/useServices';
+import { useCurrentLocation } from '../hooks/useLocation';
 
 // Every module the user can reach from one place. `keywords` widen search hits.
 const MODULES = [
@@ -61,6 +62,7 @@ const MODULES = [
 const DiscoverScreen = ({ navigation }) => {
     const [q, setQ] = useState('');
     const { data: categories = [] } = useServiceCategories();
+    const { city } = useCurrentLocation();
 
     const modules = useMemo(() => {
         const t = q.trim().toLowerCase();
@@ -93,6 +95,13 @@ const DiscoverScreen = ({ navigation }) => {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+                <View style={styles.locPill}>
+                    <Icon name="map-marker" size={14} color="#07163B" />
+                    <Text style={styles.locText} numberOfLines={1}>
+                        {city?.name || 'Locating you…'}
+                    </Text>
+                    {!!city?.name && <Text style={styles.locHint}>· nearby first</Text>}
+                </View>
                 <Text style={styles.lead}>What do you need today?</Text>
 
                 {/* Search */}
@@ -179,6 +188,9 @@ const styles = StyleSheet.create({
     headerTitle: { fontSize: 17, fontFamily: Fonts.semiBold, color: '#07163B' },
 
     scroll: { padding: 16, paddingBottom: 40 },
+    locPill: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
+    locText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#07163B', maxWidth: 200 },
+    locHint: { fontSize: 12, fontFamily: Fonts.regular, color: '#9AA0A6' },
     lead: { fontSize: 22, fontFamily: Fonts.bold, color: '#07163B', marginBottom: 14 },
 
     searchBox: {

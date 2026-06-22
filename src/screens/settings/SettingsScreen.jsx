@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
+import useUserStore from '../../store/userStore';
 
 const SECTIONS = [
     {
@@ -46,6 +47,10 @@ const SettingsScreen = ({navigation}) => {
 
     const toggle = (key) => setToggles(prev => ({...prev, [key]: !prev[key]}));
 
+    const user = useUserStore(s => s.user);
+    const fullName = [user?.first_name, user?.last_name].filter(Boolean).join(' ') || 'Your profile';
+    const phone = user?.phone_number || '—';
+
     return (
         <View style={styles.root}>
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content"/>
@@ -68,8 +73,8 @@ const SettingsScreen = ({navigation}) => {
                         <Icon name="account" size={28} color="#CCCCCC"/>
                     </View>
                     <View style={styles.profileInfo}>
-                        <Text style={styles.profileName}>Amir Shehzad</Text>
-                        <Text style={styles.profilePhone}>+92 312 8725461</Text>
+                        <Text style={styles.profileName}>{fullName}</Text>
+                        <Text style={styles.profilePhone}>{phone}</Text>
                     </View>
                     <Icon name="chevron-right" size={20} color="#AAAAAA"/>
                 </TouchableOpacity>
@@ -125,7 +130,7 @@ const SettingsScreen = ({navigation}) => {
                     </View>
                 </View>
 
-                <Text style={styles.version}>v2.4.0 · Designed by M. Nooraiz Asghar</Text>
+                <Text style={styles.version}>v2.4.0 · Developed by Nouman Afzal</Text>
             </ScrollView>
         </View>
     );

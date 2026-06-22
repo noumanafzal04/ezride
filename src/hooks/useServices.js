@@ -1,5 +1,6 @@
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import serviceService from '../services/serviceService';
+import useLocationStore from '../store/locationStore';
 
 // Service categories catalog (for browse + provider registration).
 export const useServiceCategories = (options = {}) =>
@@ -20,12 +21,19 @@ export const useServiceProviderMe = (options = {}) =>
     });
 
 // Browse approved providers by category (+ optional city), infinite scroll.
-export const useServiceProviders = (categoryId, cityId, options = {}) =>
-    useInfiniteQuery({
-        queryKey: ['service-providers', categoryId || 'all', cityId || 'all'],
+// With no explicit city filter, results are ranked by distance from the user's
+// current location (still shows ALL providers — location only orders them).
+export const useServiceProviders = (categoryId, cityId, options = {}) => {
+    const coords = useLocationStore((s) => s.coords);
+    const near = (!cityId && coords) ? coords : null;
+    const nearKey = near ? `${near.lat.toFixed(2)},${near.lng.toFixed(2)}` : 'no-loc';
+    return useInfiniteQuery({
+        queryKey: ['service-providers', categoryId || 'all', cityId || 'all', nearKey],
         queryFn: ({ pageParam = 1 }) => serviceService.providers({
             category_id: categoryId || undefined,
             city_id: cityId || undefined,
+            near_lat: near?.lat,
+            near_lng: near?.lng,
             page: pageParam,
         }).then(r => r.data?.data || {}),
         initialPageParam: 1,
@@ -36,6 +44,7 @@ export const useServiceProviders = (categoryId, cityId, options = {}) =>
         staleTime: 30 * 1000,
         ...options,
     });
+};
 
 export const useServiceProvider = (id, options = {}) =>
     useQuery({
