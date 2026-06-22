@@ -7,6 +7,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Fonts from '../../constants/fonts';
 import { fileUrl } from '../../utils/media';
+import { DetailSkeleton } from '../../components/Skeletons';
 import chatService from '../../services/chatService';
 import { useCarListing, useMarkListingSold, useDeleteListing } from '../../hooks/useMarketplace';
 
@@ -41,7 +42,12 @@ const CarDetailScreen = ({ navigation, route }) => {
         }
     };
 
-    if (isLoading) return <View style={styles.center}><ActivityIndicator color="#FFD400" /></View>;
+    if (isLoading) return (
+        <View style={styles.root}>
+            <StatusBar backgroundColor="#000000" barStyle="light-content" />
+            <DetailSkeleton />
+        </View>
+    );
     if (isError || !c) return <View style={styles.center}><Icon name="alert-circle-outline" size={40} color="#DDD" /><Text style={styles.muted}>Could not load this car.</Text></View>;
 
     const images = (c.images || []).map(i => fileUrl(i.path)).filter(Boolean);

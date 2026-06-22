@@ -4,8 +4,10 @@ import {
     Image, ActivityIndicator, TextInput, Modal, ScrollView, Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Fonts from '../../constants/fonts';
 import { fileUrl } from '../../utils/media';
+import { CarGridSkeleton, RowListSkeleton } from '../../components/Skeletons';
 import { useCurrentLocation } from '../../hooks/useLocation';
 import { useCities } from '../../hooks/useLookup';
 import SelectSheet from '../../components/SelectSheet';
@@ -59,6 +61,7 @@ const ListingCard = ({ item, onPress }) => {
 };
 
 const MarketplaceScreen = ({ navigation }) => {
+    const insets = useSafeAreaInsets();
     const [tab, setTab] = useState('buy');
     const [q, setQ] = useState('');
     const [filters, setFilters] = useState({});
@@ -135,9 +138,7 @@ const MarketplaceScreen = ({ navigation }) => {
                     <TouchableOpacity onPress={() => navigation.goBack()} style={styles.hSide}><Icon name="arrow-left" size={24} color="#07163B" /></TouchableOpacity>
                 ) : <View style={styles.hSide} />}
                 <Text style={styles.headerTitle}>Marketplace</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('SellCar')} style={styles.hSide}>
-                    <Text style={styles.sellLink}>+ Sell</Text>
-                </TouchableOpacity>
+                <View style={styles.hSide} />
             </View>
 
             <View style={styles.tabs}>
@@ -167,8 +168,8 @@ const MarketplaceScreen = ({ navigation }) => {
                         data={listings}
                         keyExtractor={i => String(i.id)}
                         numColumns={2}
-                        columnWrapperStyle={styles.grid}
-                        contentContainerStyle={styles.listPad}
+                        columnWrapperStyle={listings.length ? styles.grid : undefined}
+                        contentContainerStyle={styles.listPadFab}
                         renderItem={({ item }) => <ListingCard item={item} onPress={() => navigation.navigate('CarDetail', { id: item.id })} />}
                         ListHeaderComponent={!filters.city_id && city?.name ? (
                             <View style={styles.locPill}><Icon name="map-marker" size={13} color="#07163B" /><Text style={styles.locTxt}>Showing near {city.name}</Text></View>
@@ -179,7 +180,7 @@ const MarketplaceScreen = ({ navigation }) => {
                         onEndReachedThreshold={0.5}
                         onEndReached={() => { if (buy.hasNextPage && !buy.isFetchingNextPage) buy.fetchNextPage(); }}
                         ListFooterComponent={buy.isFetchingNextPage ? <ActivityIndicator color="#FFD400" style={{ marginVertical: 20 }} /> : null}
-                        ListEmptyComponent={buy.isLoading ? <ActivityIndicator color="#FFD400" style={{ marginTop: 40 }} /> : (
+                        ListEmptyComponent={buy.isLoading ? <CarGridSkeleton /> : (
                             <View style={styles.empty}><Icon name="car-off" size={44} color="#DDDDDD" /><Text style={styles.emptyTitle}>No cars found</Text><Text style={styles.emptySub}>Try clearing filters.</Text></View>
                         )}
                     />
@@ -200,10 +201,22 @@ const MarketplaceScreen = ({ navigation }) => {
                     onRefresh={mine.refetch}
                     onEndReachedThreshold={0.5}
                     onEndReached={() => { if (mine.hasNextPage && !mine.isFetchingNextPage) mine.fetchNextPage(); }}
-                    ListEmptyComponent={mine.isLoading ? <ActivityIndicator color="#FFD400" style={{ marginTop: 40 }} /> : (
+                    ListEmptyComponent={mine.isLoading ? <RowListSkeleton /> : (
                         <View style={styles.empty}><Icon name="tag-outline" size={44} color="#DDDDDD" /><Text style={styles.emptyTitle}>No listings yet</Text><Text style={styles.emptySub}>Post your first car above.</Text></View>
                     )}
                 />
+            )}
+
+            {/* Floating "Sell a Car" button (absolute, above the bottom) */}
+            {tab === 'buy' && (
+                <TouchableOpacity
+                    style={[styles.fab, { bottom: insets.bottom + 18 }]}
+                    onPress={() => navigation.navigate('SellCar')}
+                    activeOpacity={0.9}
+                >
+                    <Icon name="plus" size={20} color="#07163B" />
+                    <Text style={styles.fabText}>Sell a Car</Text>
+                </TouchableOpacity>
             )}
 
             <Modal visible={sheet} transparent animationType="slide" onRequestClose={() => setSheet(false)}>
@@ -287,7 +300,6 @@ const styles = StyleSheet.create({
     header: { backgroundColor: '#FFFFFF', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 52, paddingBottom: 14, paddingHorizontal: 16, borderBottomWidth: 1, borderBottomColor: '#EAEDEE' },
     hSide: { minWidth: 60, justifyContent: 'center' },
     headerTitle: { fontSize: 17, fontFamily: Fonts.semiBold, color: '#07163B' },
-    sellLink: { fontSize: 14, fontFamily: Fonts.semiBold, color: '#1D6AFF', textAlign: 'right' },
 
     tabs: { flexDirection: 'row', backgroundColor: '#FFFFFF', paddingHorizontal: 16, gap: 8, borderBottomWidth: 1, borderBottomColor: '#EAEDEE' },
     tab: { paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 2, borderBottomColor: 'transparent' },
@@ -306,7 +318,15 @@ const styles = StyleSheet.create({
     locTxt: { fontSize: 12.5, fontFamily: Fonts.medium, color: '#5D5F62' },
 
     listPad: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 40 },
+    listPadFab: { paddingHorizontal: 16, paddingTop: 4, paddingBottom: 96 },
     grid: { gap: 12 },
+
+    fab: {
+        position: 'absolute', alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8,
+        backgroundColor: '#FFD400', borderRadius: 30, paddingHorizontal: 24, paddingVertical: 15,
+        elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10,
+    },
+    fabText: { fontSize: 15, fontFamily: Fonts.semiBold, color: '#07163B' },
 
     card: { flex: 1, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#EAEDEE', overflow: 'hidden', marginBottom: 12 },
     cardImgWrap: { height: 110, backgroundColor: '#F0F1F3' },

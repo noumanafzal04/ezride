@@ -15,6 +15,7 @@ import { useRideAlerts, useCreateRideAlert, useDeleteRideAlert } from '../../hoo
 import { useRidesRealtime, useRealtimeConnected } from '../../hooks/useRealtime';
 import { useCities } from '../../hooks/useLookup';
 import SelectSheet from '../../components/SelectSheet';
+import { RowListSkeleton } from '../../components/Skeletons';
 
 const ymd = (d) => {
     const p = (n) => String(n).padStart(2, '0');
@@ -594,7 +595,7 @@ const AvailableRidesScreen = ({ navigation }) => {
                         }
                         ListEmptyComponent={
                             ridesQuery.isLoading ? (
-                                <ActivityIndicator color="#FFD400" style={{ marginTop: 40 }} />
+                                <RowListSkeleton />
                             ) : (
                                 <View style={styles.emptyState}>
                                     <Icon name="car-off" size={46} color="#DDDDDD" />

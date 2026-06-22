@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "988728487197",
+    "project_id": "ezride-a76b9",
+    "storage_bucket": "ezride-a76b9.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:988728487197:android:838ad7fa1a68ece19dc5f4",
+        "android_client_info": {
+          "package_name": "com.ezride"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD6_P0C6O7tPGbN9VaQ4DzFY5dFBZwJk6c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

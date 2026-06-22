@@ -6,6 +6,7 @@ import { useApp } from '../context/AppContext';
 import { useChatUnread } from '../hooks/useChat';
 import { useUserRealtime, useRealtimeConnected } from '../hooks/useRealtime';
 import { useLocationWatch } from '../hooks/useLocation';
+import { useFcm } from '../hooks/useFcm';
 import LocationPrompt from '../components/LocationPrompt';
 import HomeScreen from '../screens/HomeScreen';
 import ChatsScreen from '../screens/chat/ChatsScreen';
@@ -100,6 +101,8 @@ const MainNavigator = () => {
     useUserRealtime();
     // Detect current city; ask before switching if it changed.
     useLocationWatch();
+    // Register for push notifications + handle foreground/taps.
+    useFcm();
 
     return (
         <>

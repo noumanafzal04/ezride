@@ -8,6 +8,7 @@ import Fonts from '../../constants/fonts';
 import { useServiceProviders } from '../../hooks/useServices';
 import { useCities } from '../../hooks/useLookup';
 import SelectSheet from '../../components/SelectSheet';
+import { RowListSkeleton } from '../../components/Skeletons';
 
 const ServiceProvidersScreen = ({ navigation, route }) => {
     const category = route?.params?.category || null;
@@ -90,7 +91,7 @@ const ServiceProvidersScreen = ({ navigation, route }) => {
                 onEndReached={() => { if (query.hasNextPage && !query.isFetchingNextPage) query.fetchNextPage(); }}
                 ListFooterComponent={query.isFetchingNextPage ? <ActivityIndicator color="#FFD400" style={styles.spin} /> : null}
                 ListEmptyComponent={
-                    query.isLoading ? <ActivityIndicator color="#FFD400" style={styles.spin} /> : (
+                    query.isLoading ? <RowListSkeleton /> : (
                         <View style={styles.empty}>
                             <Icon name="tools" size={46} color="#DDDDDD" />
                             <Text style={styles.emptyTitle}>No providers yet</Text>

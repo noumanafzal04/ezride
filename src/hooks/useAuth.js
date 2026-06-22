@@ -2,6 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import useAuthStore from '../store/authStore';
 import useUserStore from '../store/userStore';
 import authService from '../services/authService';
+import { unregisterDeviceToken } from '../services/fcm';
 
 const useAuth = () => {
     // Per-field selectors so consumers only re-render when *their* values change
@@ -42,6 +43,8 @@ const useAuth = () => {
 
     // ─── Logout ───────────────────────────────────────────────
     const logout = () => {
+        // Stop push to this device (fires before auth clears, using cached token)
+        unregisterDeviceToken();
         // Clear local instantly
         clearAuth();
         clearUser();

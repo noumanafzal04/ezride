@@ -6,6 +6,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
 import { useServiceCategories } from '../../hooks/useServices';
+import { TilesSkeleton } from '../../components/Skeletons';
 
 const ServicesScreen = ({ navigation }) => {
     const { data: categories = [], isLoading } = useServiceCategories();
@@ -45,8 +46,9 @@ const ServicesScreen = ({ navigation }) => {
                     </TouchableOpacity>
                 ) : <View style={styles.headerSide} />}
                 <Text style={styles.headerTitle}>Car Services</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('MyServiceRequests')} style={styles.headerSide}>
-                    <Text style={styles.headerLink}>Requests</Text>
+                <TouchableOpacity style={styles.reqBtn} onPress={() => navigation.navigate('MyServiceRequests')} activeOpacity={0.8}>
+                    <Icon name="clipboard-text-clock-outline" size={15} color="#07163B" />
+                    <Text style={styles.reqText}>Requests</Text>
                 </TouchableOpacity>
             </View>
 
@@ -72,7 +74,7 @@ const ServicesScreen = ({ navigation }) => {
             </View>
 
             {isLoading ? (
-                <View style={styles.center}><ActivityIndicator color="#FFD400" /></View>
+                <TilesSkeleton count={9} />
             ) : (
                 <FlatList
                     data={data}
@@ -103,7 +105,8 @@ const styles = StyleSheet.create({
     },
     headerTitle: { fontSize: 17, fontFamily: Fonts.semiBold, color: '#07163B' },
     headerSide: { minWidth: 64, justifyContent: 'center' },
-    headerLink: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#07163B', textAlign: 'right' },
+    reqBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F5F6F8', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 7 },
+    reqText: { fontSize: 12.5, fontFamily: Fonts.semiBold, color: '#07163B' },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
     searchWrap: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 4 },
