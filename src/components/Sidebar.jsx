@@ -15,10 +15,10 @@ const {width} = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.82;
 
 const NAV_ITEMS = [
-    {key: 'Discover', label: 'Discover', icon: 'compass-outline'},
     {key: 'Rides', label: 'Rides', icon: 'car-outline'},
     {key: 'RideHistory', label: 'Ride History', icon: 'history'},
     {key: 'Services', label: 'Car Services', icon: 'wrench-outline'},
+    {key: 'Rentals', label: 'Rent a Car', icon: 'car-key'},
     {key: 'Marketplace', label: 'Buy/Sell Cars', icon: 'tag-outline'},
     {key: 'Messages', label: 'Messages', icon: 'message-outline'},
 ];

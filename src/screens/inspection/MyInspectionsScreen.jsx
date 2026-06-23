@@ -25,7 +25,7 @@ const StatusBadge = ({ status }) => {
     );
 };
 
-const MyInspectionsScreen = ({ navigation }) => {
+const MyInspectionsScreen = ({ navigation, embedded = false }) => {
     const query = useMyInspections();
     const items = (query.data?.pages || []).flatMap(p => p.requests || []);
 
@@ -71,15 +71,18 @@ const MyInspectionsScreen = ({ navigation }) => {
 
     return (
         <View style={styles.root}>
-            <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
-
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Icon name="arrow-left" size={24} color="#07163B" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>My Inspections</Text>
-                <View style={{ width: 24 }} />
-            </View>
+            {!embedded && (
+                <>
+                    <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={() => navigation.goBack()}>
+                            <Icon name="arrow-left" size={24} color="#07163B" />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>My Inspections</Text>
+                        <View style={{ width: 24 }} />
+                    </View>
+                </>
+            )}
 
             <FlatList
                 data={items}

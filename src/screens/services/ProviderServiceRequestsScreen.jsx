@@ -17,7 +17,7 @@ const fmtDate = (iso) => {
     return isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
-const ProviderServiceRequestsScreen = ({ navigation }) => {
+const ProviderServiceRequestsScreen = ({ navigation, embedded = false }) => {
     const [filter, setFilter] = useState('all');
     const query = useProviderServiceBookings(filter === 'all' ? null : filter);
     const items = (query.data?.pages || []).flatMap(p => p.bookings || []);
@@ -96,14 +96,18 @@ const ProviderServiceRequestsScreen = ({ navigation }) => {
 
     return (
         <View style={styles.root}>
-            <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Icon name="arrow-left" size={24} color="#07163B" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Service Requests</Text>
-                <View style={styles.headerSpacer} />
-            </View>
+            {!embedded && (
+                <>
+                    <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={() => navigation.goBack()}>
+                            <Icon name="arrow-left" size={24} color="#07163B" />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>Service Requests</Text>
+                        <View style={styles.headerSpacer} />
+                    </View>
+                </>
+            )}
 
             <View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>

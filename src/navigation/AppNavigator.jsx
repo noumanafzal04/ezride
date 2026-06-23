@@ -26,6 +26,10 @@ import SellCarScreen from "../screens/buysell/SellCarScreen";
 import TopUpScreen from "../screens/user/TopUpScreen";
 import HistoryScreen from "../screens/user/HistoryScreen";
 import SettingsScreen from "../screens/settings/SettingsScreen";
+import MembershipScreen from "../screens/settings/MembershipScreen";
+import RentalsScreen from "../screens/rental/RentalsScreen";
+import RentalDetailScreen from "../screens/rental/RentalDetailScreen";
+import ListRentalScreen from "../screens/rental/ListRentalScreen";
 import HelpSupportScreen from "../screens/settings/HelpSupportScreen";
 import DriverOnboardingScreen from '../screens/driver/DriverOnboardingScreen';
 import InspectionRequestScreen from '../screens/inspection/InspectionRequestScreen';
@@ -76,6 +80,10 @@ const AppNavigator = () => {
                 <Stack.Screen name="TopUp" component={TopUpScreen}/>
                 <Stack.Screen name="History" component={HistoryScreen}/>
                 <Stack.Screen name="Settings" component={SettingsScreen}/>
+                <Stack.Screen name="Membership" component={MembershipScreen}/>
+                <Stack.Screen name="Rentals" component={RentalsScreen}/>
+                <Stack.Screen name="RentalDetail" component={RentalDetailScreen}/>
+                <Stack.Screen name="ListRental" component={ListRentalScreen}/>
                 <Stack.Screen name="HelpSupport" component={HelpSupportScreen}/>
                 <Stack.Screen name="DriverOnboarding" component={DriverOnboardingScreen}/>
 

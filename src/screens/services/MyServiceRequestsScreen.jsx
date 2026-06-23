@@ -16,7 +16,7 @@ const fmtDate = (iso) => {
     return isNaN(d.getTime()) ? '' : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
-const MyServiceRequestsScreen = ({ navigation }) => {
+const MyServiceRequestsScreen = ({ navigation, embedded = false }) => {
     const query = useMyServiceBookings();
     const items = (query.data?.pages || []).flatMap(p => p.bookings || []);
     const [reviewing, setReviewing] = useState(null);
@@ -94,14 +94,18 @@ const MyServiceRequestsScreen = ({ navigation }) => {
 
     return (
         <View style={styles.root}>
-            <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Icon name="arrow-left" size={24} color="#07163B" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>My Service Requests</Text>
-                <View style={styles.headerSpacer} />
-            </View>
+            {!embedded && (
+                <>
+                    <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={() => navigation.goBack()}>
+                            <Icon name="arrow-left" size={24} color="#07163B" />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>My Service Requests</Text>
+                        <View style={styles.headerSpacer} />
+                    </View>
+                </>
+            )}
 
             <FlatList
                 data={items}

@@ -11,6 +11,8 @@ import { useCities } from '../../hooks/useLookup';
 import useMe from '../../hooks/useMe';
 import { useServiceCategories, useServiceProviderMe, useRegisterServiceProvider } from '../../hooks/useServices';
 import SelectSheet from '../../components/SelectSheet';
+import TopTabs from '../../components/TopTabs';
+import ProviderServiceRequestsScreen from './ProviderServiceRequestsScreen';
 
 const STATUS_META = {
     pending:   { label: 'Pending approval', color: '#92600B', bg: '#FFF7ED', icon: 'clock-outline', note: 'Our team is reviewing your application. You’ll be notified once approved.' },
@@ -24,6 +26,7 @@ const ServiceProviderRegisterScreen = ({ navigation }) => {
     const { data: me } = useMe();
     const meQuery = useServiceProviderMe();
     const provider = meQuery.data;
+    const [provTab, setProvTab] = useState('requests');
 
     const catsQuery = useServiceCategories();
     const categories = catsQuery.data || [];
@@ -92,41 +95,62 @@ const ServiceProviderRegisterScreen = ({ navigation }) => {
         );
     }
 
-    if (provider) {
+    // Profile detail card (shared by approved tab + non-approved status view).
+    const ProfileDetail = () => {
         const meta = STATUS_META[provider.status] || STATUS_META.pending;
+        return (
+            <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+                <View style={[styles.statusCard, { backgroundColor: meta.bg }]}>
+                    <Icon name={meta.icon} size={30} color={meta.color} />
+                    <Text style={[styles.statusLabel, { color: meta.color }]}>{meta.label}</Text>
+                    <Text style={styles.statusNote}>{meta.note}</Text>
+                </View>
+
+                <Text style={styles.section}>Your Profile</Text>
+                <View style={styles.card}>
+                    <Text style={styles.bizName}>{provider.business_name}</Text>
+                    {!!provider.city?.name && <Text style={styles.bizMeta}>{provider.city.name}{provider.area ? ` · ${provider.area}` : ''}</Text>}
+                    <Text style={styles.bizMeta}>{provider.phone}</Text>
+                    {!!provider.description && <Text style={styles.bizDesc}>{provider.description}</Text>}
+                    <View style={styles.chipsWrap}>
+                        {(provider.categories || []).map(c => (
+                            <View key={c.id} style={styles.tag}><Text style={styles.tagText}>{c.name}</Text></View>
+                        ))}
+                    </View>
+                </View>
+            </ScrollView>
+        );
+    };
+
+    if (provider) {
+        // Approved → land on incoming requests; profile detail lives in its own tab.
+        if (provider.status === 'approved') {
+            return (
+                <View style={styles.root}>
+                    <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={() => navigation.goBack()}><Icon name="arrow-left" size={24} color="#07163B" /></TouchableOpacity>
+                        <Text style={styles.headerTitle}>{provider.business_name || 'My Services'}</Text>
+                        <View style={styles.headerSpacer} />
+                    </View>
+                    <TopTabs
+                        tabs={[{ key: 'requests', label: 'Service Requests' }, { key: 'profile', label: 'My Profile' }]}
+                        active={provTab}
+                        onChange={setProvTab}
+                    />
+                    {provTab === 'requests'
+                        ? <ProviderServiceRequestsScreen navigation={navigation} embedded />
+                        : <ProfileDetail />}
+                </View>
+            );
+        }
+
+        // Pending / rejected / suspended → status + profile only.
         return (
             <View style={styles.root}>
                 <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
                 <Header />
-                <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
-                    <View style={[styles.statusCard, { backgroundColor: meta.bg }]}>
-                        <Icon name={meta.icon} size={30} color={meta.color} />
-                        <Text style={[styles.statusLabel, { color: meta.color }]}>{meta.label}</Text>
-                        <Text style={styles.statusNote}>{meta.note}</Text>
-                    </View>
-
-                    <Text style={styles.section}>Your Profile</Text>
-                    <View style={styles.card}>
-                        <Text style={styles.bizName}>{provider.business_name}</Text>
-                        {!!provider.city?.name && <Text style={styles.bizMeta}>{provider.city.name}{provider.area ? ` · ${provider.area}` : ''}</Text>}
-                        <Text style={styles.bizMeta}>{provider.phone}</Text>
-                        {!!provider.description && <Text style={styles.bizDesc}>{provider.description}</Text>}
-                        <View style={styles.chipsWrap}>
-                            {(provider.categories || []).map(c => (
-                                <View key={c.id} style={styles.tag}><Text style={styles.tagText}>{c.name}</Text></View>
-                            ))}
-                        </View>
-                    </View>
-
-                    <TouchableOpacity
-                        style={styles.requestsBtn}
-                        onPress={() => navigation.navigate('ProviderServiceRequests')}
-                        activeOpacity={0.85}
-                    >
-                        <Icon name="clipboard-list-outline" size={18} color="#111111" />
-                        <Text style={styles.requestsText}>View Service Requests</Text>
-                    </TouchableOpacity>
-                </ScrollView>
+                <ProfileDetail />
             </View>
         );
     }

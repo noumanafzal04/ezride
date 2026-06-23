@@ -53,8 +53,7 @@ const MODULES = [
         title: 'Rent a Car',
         desc: 'Self-drive & with driver',
         tint: '#FFF1F2', ic: '#E11D48',
-        route: null, // coming soon
-        soon: true,
+        route: 'Rentals',
         keywords: 'rent rental hire self drive lease',
     },
 ];

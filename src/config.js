@@ -1,5 +1,5 @@
 const config = {
-    BASE_URL: 'http://192.168.105.134:8000/api/v1/', // iOS simulator
+    BASE_URL: 'http://192.168.105.153:8000/api/v1/', // iOS simulator
     // BASE_URL: 'http://10.0.2.2:8000/api/v1/',     // Android emulator ✅
 
     // Bump this whenever you change BASE_URL above. On the next app launch the

@@ -9,6 +9,7 @@ const chatService = {
     byBooking: (bookingId) => api.get(`/conversations/by-booking/${bookingId}`),
     byServiceBooking: (serviceBookingId) => api.get(`/conversations/by-service-booking/${serviceBookingId}`),
     byListing: (listingId) => api.get(`/conversations/by-listing/${listingId}`),
+    byRentalBooking: (bookingId) => api.get(`/conversations/by-rental-booking/${bookingId}`),
 };
 
 export default chatService;

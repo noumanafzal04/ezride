@@ -7,10 +7,13 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
 import { useServiceCategories } from '../../hooks/useServices';
 import { TilesSkeleton } from '../../components/Skeletons';
+import TopTabs from '../../components/TopTabs';
+import MyServiceRequestsScreen from './MyServiceRequestsScreen';
 
 const ServicesScreen = ({ navigation }) => {
     const { data: categories = [], isLoading } = useServiceCategories();
     const [q, setQ] = useState('');
+    const [tab, setTab] = useState('browse');
 
     const data = useMemo(() => {
         const t = q.trim().toLowerCase();
@@ -46,51 +49,56 @@ const ServicesScreen = ({ navigation }) => {
                     </TouchableOpacity>
                 ) : <View style={styles.headerSide} />}
                 <Text style={styles.headerTitle}>Car Services</Text>
-                <TouchableOpacity style={styles.reqBtn} onPress={() => navigation.navigate('MyServiceRequests')} activeOpacity={0.8}>
-                    <Icon name="clipboard-text-clock-outline" size={15} color="#07163B" />
-                    <Text style={styles.reqText}>Requests</Text>
-                </TouchableOpacity>
+                <View style={styles.headerSide} />
             </View>
 
-            {/* Search */}
-            <View style={styles.searchWrap}>
-                <View style={styles.searchBox}>
-                    <Icon name="magnify" size={19} color="#9AA0A6" />
-                    <TextInput
-                        value={q}
-                        onChangeText={setQ}
-                        placeholder="Search services…"
-                        placeholderTextColor="#9AA0A6"
-                        style={styles.searchInput}
-                        autoCapitalize="none"
-                        returnKeyType="search"
-                    />
-                    {!!q && (
-                        <TouchableOpacity onPress={() => setQ('')}>
-                            <Icon name="close-circle" size={17} color="#C4C9CF" />
-                        </TouchableOpacity>
-                    )}
-                </View>
-            </View>
+            <TopTabs
+                tabs={[{ key: 'browse', label: 'Services' }, { key: 'requests', label: 'My Requests' }]}
+                active={tab}
+                onChange={setTab}
+            />
 
-            {isLoading ? (
+            {tab === 'requests' ? (
+                <MyServiceRequestsScreen navigation={navigation} embedded />
+            ) : isLoading ? (
                 <TilesSkeleton count={9} />
             ) : (
-                <FlatList
-                    data={data}
-                    keyExtractor={item => String(item.id)}
-                    renderItem={renderItem}
-                    numColumns={3}
-                    columnWrapperStyle={styles.row}
-                    contentContainerStyle={styles.grid}
-                    showsVerticalScrollIndicator={false}
-                    ListEmptyComponent={
-                        <View style={styles.empty}>
-                            <Icon name="magnify-close" size={40} color="#DDDDDD" />
-                            <Text style={styles.emptyText}>No service matches “{q}”.</Text>
+                <>
+                    <View style={styles.searchWrap}>
+                        <View style={styles.searchBox}>
+                            <Icon name="magnify" size={19} color="#9AA0A6" />
+                            <TextInput
+                                value={q}
+                                onChangeText={setQ}
+                                placeholder="Search services…"
+                                placeholderTextColor="#9AA0A6"
+                                style={styles.searchInput}
+                                autoCapitalize="none"
+                                returnKeyType="search"
+                            />
+                            {!!q && (
+                                <TouchableOpacity onPress={() => setQ('')}>
+                                    <Icon name="close-circle" size={17} color="#C4C9CF" />
+                                </TouchableOpacity>
+                            )}
                         </View>
-                    }
-                />
+                    </View>
+                    <FlatList
+                        data={data}
+                        keyExtractor={item => String(item.id)}
+                        renderItem={renderItem}
+                        numColumns={3}
+                        columnWrapperStyle={styles.row}
+                        contentContainerStyle={styles.grid}
+                        showsVerticalScrollIndicator={false}
+                        ListEmptyComponent={
+                            <View style={styles.empty}>
+                                <Icon name="magnify-close" size={40} color="#DDDDDD" />
+                                <Text style={styles.emptyText}>No service matches “{q}”.</Text>
+                            </View>
+                        }
+                    />
+                </>
             )}
         </View>
     );

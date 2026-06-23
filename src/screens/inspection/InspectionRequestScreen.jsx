@@ -11,6 +11,8 @@ import Fonts from '../../constants/fonts';
 import { useCities } from '../../hooks/useLookup';
 import { useCurrentLocation } from '../../hooks/useLocation';
 import useMe from '../../hooks/useMe';
+import TopTabs from '../../components/TopTabs';
+import MyInspectionsScreen from './MyInspectionsScreen';
 import { useSubmitInspection } from '../../hooks/useInspections';
 import SelectSheet from '../../components/SelectSheet';
 
@@ -118,6 +120,7 @@ const InspectionRequestScreen = ({ navigation }) => {
     };
 
     const submitting = submit.isPending;
+    const [tab, setTab] = useState('book');
 
     return (
         <View style={styles.root}>
@@ -128,11 +131,19 @@ const InspectionRequestScreen = ({ navigation }) => {
                     <Icon name="arrow-left" size={24} color="#07163B" />
                 </TouchableOpacity>
                 <Text style={styles.headerTitle}>Car Inspection</Text>
-                <TouchableOpacity onPress={() => navigation.navigate('MyInspections')}>
-                    <Text style={styles.headerLink}>My requests</Text>
-                </TouchableOpacity>
+                <View style={{ width: 24 }} />
             </View>
 
+            <TopTabs
+                tabs={[{ key: 'book', label: 'Book Inspection' }, { key: 'mine', label: 'My Inspections' }]}
+                active={tab}
+                onChange={setTab}
+            />
+
+            {tab === 'mine' ? (
+                <MyInspectionsScreen navigation={navigation} embedded />
+            ) : (
+            <>
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}
@@ -237,6 +248,8 @@ const InspectionRequestScreen = ({ navigation }) => {
                     <Text style={styles.submitText}>{submitting ? 'Submitting…' : 'Submit Request'}</Text>
                 </TouchableOpacity>
             </View>
+            </>
+            )}
 
             <SelectSheet
                 visible={cityOpen}

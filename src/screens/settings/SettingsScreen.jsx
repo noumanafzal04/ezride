@@ -27,6 +27,7 @@ const SECTIONS = [
     {
         title: 'Payment',
         items: [
+            {icon: 'star-circle-outline', label: 'Membership & Plans', nav: 'Membership'},
             {icon: 'wallet-outline', label: 'Wallet & Top Up', nav: 'TopUp'},
             {icon: 'history', label: 'Transaction History', nav: 'History'},
             {icon: 'credit-card-outline', label: 'Payment Methods', nav: null},
