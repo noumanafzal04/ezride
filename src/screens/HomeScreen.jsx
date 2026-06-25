@@ -146,6 +146,7 @@ const HomeScreen = ({navigation}) => {
                 <TouchableOpacity
                     style={styles.notifBtn}
                     onPress={() => navigation.navigate('Notifications')}
+                    hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 >
                     <Icon name="bell-outline" size={20} color="#07163B"/>
                     {notifUnread > 0 && <View style={styles.notifDot}/>}
@@ -458,9 +459,9 @@ const styles = StyleSheet.create({
         borderBottomColor: '#F0F0F0',
     },
     logo: {fontSize: 17, fontFamily: Fonts.bold, color: '#07163B', letterSpacing: 1},
-    notifBtn: {position: 'relative'},
+    notifBtn: { position: 'relative', padding: 6, margin: -6 },
     notifDot: {
-        position: 'absolute', top: 0, right: 0,
+        position: 'absolute', top: 4, right: 4,
         width: 7, height: 7, borderRadius: 4,
         backgroundColor: '#D83F54',
         borderWidth: 1.5, borderColor: '#FFFFFF',

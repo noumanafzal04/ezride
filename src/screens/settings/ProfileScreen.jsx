@@ -9,6 +9,7 @@ import Fonts from '../../constants/fonts';
 import config from '../../config';
 import useMe from '../../hooks/useMe';
 import useUserStore from '../../store/userStore';
+import { PageSkeleton } from '../../components/Skeletons';
 
 const FILE_BASE = config.BASE_URL.replace(/\/api\/v1\/?$/, '/');
 const fileUrl = (p) => (p ? `${FILE_BASE}storage/${p}` : null);
@@ -64,8 +65,8 @@ const ProfileScreen = ({ navigation }) => {
 
     if (!user && isLoading) {
         return (
-            <View style={[styles.root, styles.centerFill]}>
-                <ActivityIndicator color="#FFD400" />
+            <View style={styles.root}>
+                <PageSkeleton rows={5} />
             </View>
         );
     }

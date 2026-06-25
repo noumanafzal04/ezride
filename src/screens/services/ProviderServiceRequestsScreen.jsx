@@ -6,6 +6,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
+import { useBottomInset } from '../../hooks/useBottomInset';
 import { useProviderServiceBookings, useServiceBookingAction } from '../../hooks/useServices';
 import { sbMeta, SB_STATUS_META } from '../../constants/serviceBooking';
 
@@ -18,6 +19,7 @@ const fmtDate = (iso) => {
 };
 
 const ProviderServiceRequestsScreen = ({ navigation, embedded = false }) => {
+    const pb = useBottomInset();
     const [filter, setFilter] = useState('all');
     const query = useProviderServiceBookings(filter === 'all' ? null : filter);
     const items = (query.data?.pages || []).flatMap(p => p.bookings || []);
@@ -127,7 +129,7 @@ const ProviderServiceRequestsScreen = ({ navigation, embedded = false }) => {
                 data={items}
                 keyExtractor={item => String(item.id)}
                 renderItem={renderItem}
-                contentContainerStyle={items.length ? { padding: 16, gap: 12 } : styles.emptyWrap}
+                contentContainerStyle={items.length ? { padding: 16, gap: 12, paddingBottom: embedded ? 16 : pb } : styles.emptyWrap}
                 showsVerticalScrollIndicator={false}
                 refreshing={query.isRefetching}
                 onRefresh={query.refetch}

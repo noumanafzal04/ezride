@@ -6,6 +6,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
 import useUserStore from '../../store/userStore';
+import { useBottomInset } from '../../hooks/useBottomInset';
 
 const SECTIONS = [
     {
@@ -44,6 +45,7 @@ const SECTIONS = [
 ];
 
 const SettingsScreen = ({navigation}) => {
+    const pb = useBottomInset();
     const [toggles, setToggles] = useState({notifications: true, location: true});
 
     const toggle = (key) => setToggles(prev => ({...prev, [key]: !prev[key]}));
@@ -63,7 +65,7 @@ const SettingsScreen = ({navigation}) => {
                 <View style={{width: 24}}/>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: 40}}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: pb}}>
 
                 {/* Profile Card */}
                 <TouchableOpacity

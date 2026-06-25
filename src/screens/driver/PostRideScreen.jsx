@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DatePicker from 'react-native-date-picker';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Fonts from '../../constants/fonts';
@@ -100,22 +100,7 @@ const PostRideScreen = ({ navigation }) => {
     };
 
     // ── Date/Time picker (date → then time) ────────────────────────────────────
-    const [pickerMode, setPickerMode] = useState(null); // 'date' | 'time'
-    const [draftDate, setDraftDate]   = useState(new Date());
-
-    const onPickerChange = (event, selected) => {
-        if (event.type === 'dismissed' || !selected) { setPickerMode(null); return; }
-        if (pickerMode === 'date') {
-            setDraftDate(selected);
-            setPickerMode(Platform.OS === 'ios' ? null : 'time');
-            if (Platform.OS === 'ios') setDepartureAt(selected);
-        } else {
-            const combined = new Date(draftDate);
-            combined.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
-            setDepartureAt(combined);
-            setPickerMode(null);
-        }
-    };
+    const [showPicker, setShowPicker] = useState(false);
 
     // ── OSRM route + auto price ────────────────────────────────────────────────
     const routeQuery = useRideRoute(fromCity, toCity);
@@ -390,7 +375,7 @@ const PostRideScreen = ({ navigation }) => {
                         <Text style={styles.label}>Departure</Text>
                         <TouchableOpacity
                             style={styles.selectBox}
-                            onPress={() => { setPickerMode('date'); setDraftDate(departureAt || new Date()); }}
+                            onPress={() => setShowPicker(true)}
                         >
                             <Icon name="calendar-clock" size={18} color="#9CA3AF" />
                             <Text style={departureAt ? styles.selectVal : styles.selectPH}>
@@ -398,15 +383,17 @@ const PostRideScreen = ({ navigation }) => {
                             </Text>
                             <Icon name="chevron-down" size={18} color="#9CA3AF" />
                         </TouchableOpacity>
-                        {pickerMode && (
-                            <DateTimePicker
-                                value={draftDate}
-                                mode={pickerMode}
-                                display="default"
-                                minimumDate={pickerMode === 'date' ? new Date() : undefined}
-                                onChange={onPickerChange}
-                            />
-                        )}
+                        <DatePicker
+                            modal
+                            open={showPicker}
+                            date={departureAt || new Date()}
+                            mode="datetime"
+                            minimumDate={new Date()}
+                            locale="en-US"
+                            theme="light"
+                            onConfirm={(d) => { setShowPicker(false); setDepartureAt(d); }}
+                            onCancel={() => setShowPicker(false)}
+                        />
 
                         {/* Available seats */}
                         <Text style={styles.label}>Available Seats</Text>

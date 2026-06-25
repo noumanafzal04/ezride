@@ -8,15 +8,13 @@ import { useUserRealtime, useRealtimeConnected } from '../hooks/useRealtime';
 import { useLocationWatch } from '../hooks/useLocation';
 import { useFcm } from '../hooks/useFcm';
 import LocationPrompt from '../components/LocationPrompt';
-import HomeScreen from '../screens/HomeScreen';
+// Home design: original HomeScreen · HomeScreenV2 (navy hero) · HomeScreenV3 (light, PakWheels/OLX-style).
+import HomeScreen from '../screens/HomeScreenV3';
 import ChatsScreen from '../screens/chat/ChatsScreen';
 import ServicesScreen from '../screens/services/ServicesScreen';
 
-// User
-import MyBookingsScreen from '../screens/user/MyBookingsScreen';
-
-// Driver
-import RideRequestsScreen from '../screens/driver/RideRequestsScreen';
+// Rides hub (Find Rides + My Rides for both roles)
+import RidesHubScreen from '../screens/RidesHubScreen';
 import PostRideScreen from "../screens/driver/PostRideScreen";
 
 
@@ -93,8 +91,7 @@ const CustomTabBar = ({ state, descriptors, navigation }) => {
 };
 
 const MainNavigator = () => {
-    const { role } = useApp();
-    const RidesScreen = role === 'driver' ? RideRequestsScreen : MyBookingsScreen;
+    const RidesScreen = RidesHubScreen;
 
     // Live updates for the whole authenticated session (booking status,
     // notifications, ride alerts) over the user's private WebSocket channel.

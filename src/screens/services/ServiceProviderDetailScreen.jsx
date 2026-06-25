@@ -6,12 +6,31 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Fonts from '../../constants/fonts';
-import { useServiceProvider } from '../../hooks/useServices';
+import { useServiceProvider, useServiceProviderReviews } from '../../hooks/useServices';
+
+// Inline 5-star row.
+const Stars = ({ value = 0, size = 13 }) => (
+    <View style={{ flexDirection: 'row', gap: 1 }}>
+        {[1, 2, 3, 4, 5].map(n => (
+            <Icon key={n} name={n <= Math.round(value) ? 'star' : 'star-outline'} size={size} color="#FFC107" />
+        ))}
+    </View>
+);
+
+const formatDate = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d)) return '';
+    return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+};
 
 const ServiceProviderDetailScreen = ({ navigation, route }) => {
     const { id } = route.params || {};
     const insets = useSafeAreaInsets();
     const { data: p, isLoading, isError } = useServiceProvider(id);
+    const reviewsQuery = useServiceProviderReviews(id);
+    const reviews = (reviewsQuery.data?.pages || []).flatMap(pg => pg.reviews || []);
+    const reviewsTotal = reviewsQuery.data?.pages?.[0]?.meta?.total ?? reviews.length;
 
     const rating = p?.rating_avg != null ? Number(p.rating_avg).toFixed(1) : null;
     const call = () => p?.phone && Linking.openURL(`tel:${p.phone}`);
@@ -34,7 +53,7 @@ const ServiceProviderDetailScreen = ({ navigation, route }) => {
                 <View style={styles.center}><Icon name="alert-circle-outline" size={40} color="#DDDDDD" /><Text style={styles.emptySub}>Could not load this provider.</Text></View>
             ) : (
                 <>
-                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 96 }}>
                         <View style={styles.topCard}>
                             <View style={styles.avatar}><Text style={styles.avatarInitial}>{(p.business_name?.[0] || '?').toUpperCase()}</Text></View>
                             <Text style={styles.bizName}>{p.business_name}</Text>
@@ -71,6 +90,63 @@ const ServiceProviderDetailScreen = ({ navigation, route }) => {
                                 <Text style={styles.section}>About</Text>
                                 <View style={styles.card}><Text style={styles.desc}>{p.description}</Text></View>
                             </>
+                        )}
+
+                        {/* Reviews — what customers said about his work */}
+                        <View style={styles.reviewsHead}>
+                            <Text style={styles.section}>Reviews</Text>
+                            {reviewsTotal > 0 && <Text style={styles.reviewsCount}>{reviewsTotal}</Text>}
+                        </View>
+
+                        {rating && (
+                            <View style={styles.ratingSummary}>
+                                <Text style={styles.ratingBig}>{rating}</Text>
+                                <View style={{ gap: 3 }}>
+                                    <Stars value={Number(rating)} size={16} />
+                                    <Text style={styles.ratingSub}>
+                                        Based on {p.total_jobs || 0} completed {(p.total_jobs === 1) ? 'job' : 'jobs'}
+                                    </Text>
+                                </View>
+                            </View>
+                        )}
+
+                        {reviewsQuery.isLoading ? (
+                            <View style={styles.card}><ActivityIndicator color="#FFD400" /></View>
+                        ) : reviews.length === 0 ? (
+                            <View style={[styles.card, styles.noReviews]}>
+                                <Icon name="comment-text-outline" size={30} color="#DDDDDD" />
+                                <Text style={styles.noReviewsText}>No reviews yet</Text>
+                            </View>
+                        ) : (
+                            <View style={{ gap: 10 }}>
+                                {reviews.map(r => (
+                                    <View key={r.id} style={styles.reviewCard}>
+                                        <View style={styles.reviewTop}>
+                                            <View style={styles.reviewAvatar}>
+                                                <Text style={styles.reviewAvatarText}>{(r.from_name?.[0] || '?').toUpperCase()}</Text>
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.reviewName} numberOfLines={1}>{r.from_name}</Text>
+                                                <Text style={styles.reviewDate}>{formatDate(r.created_at)}</Text>
+                                            </View>
+                                            <Stars value={r.rating} />
+                                        </View>
+                                        {!!r.review && <Text style={styles.reviewBody}>{r.review}</Text>}
+                                    </View>
+                                ))}
+
+                                {reviewsQuery.hasNextPage && (
+                                    <TouchableOpacity
+                                        style={styles.loadMore}
+                                        onPress={() => reviewsQuery.fetchNextPage()}
+                                        disabled={reviewsQuery.isFetchingNextPage}
+                                    >
+                                        {reviewsQuery.isFetchingNextPage
+                                            ? <ActivityIndicator color="#1D6AFF" size="small" />
+                                            : <Text style={styles.loadMoreText}>Show more reviews</Text>}
+                                    </TouchableOpacity>
+                                )}
+                            </View>
                         )}
                     </ScrollView>
 
@@ -128,6 +204,26 @@ const styles = StyleSheet.create({
     tag: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#F5F5F7', borderRadius: 9, paddingHorizontal: 10, paddingVertical: 6 },
     tagText: { fontSize: 12.5, fontFamily: Fonts.medium, color: '#07163B' },
     desc: { fontSize: 13.5, fontFamily: Fonts.regular, color: '#3B3E40', lineHeight: 20 },
+
+    reviewsHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    reviewsCount: { fontSize: 12, fontFamily: Fonts.semiBold, color: '#9AA0A6', marginTop: 10 },
+    ratingSummary: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#EAEDEE', padding: 16, marginBottom: 10 },
+    ratingBig: { fontSize: 34, fontFamily: Fonts.bold, color: '#07163B' },
+    ratingSub: { fontSize: 12, fontFamily: Fonts.regular, color: '#9AA0A6' },
+
+    noReviews: { alignItems: 'center', gap: 8, paddingVertical: 26 },
+    noReviewsText: { fontSize: 13, fontFamily: Fonts.medium, color: '#AAAAAA' },
+
+    reviewCard: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#EAEDEE', padding: 14, gap: 8 },
+    reviewTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    reviewAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#EEF1F8', alignItems: 'center', justifyContent: 'center' },
+    reviewAvatarText: { fontSize: 15, fontFamily: Fonts.bold, color: '#07163B' },
+    reviewName: { fontSize: 13.5, fontFamily: Fonts.semiBold, color: '#202223' },
+    reviewDate: { fontSize: 11.5, fontFamily: Fonts.regular, color: '#9AA0A6', marginTop: 1 },
+    reviewBody: { fontSize: 13, fontFamily: Fonts.regular, color: '#3B3E40', lineHeight: 19 },
+
+    loadMore: { alignItems: 'center', paddingVertical: 13, borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#FFFFFF' },
+    loadMoreText: { fontSize: 13.5, fontFamily: Fonts.semiBold, color: '#1D6AFF' },
 
     bottomBar: {
         position: 'absolute', bottom: 0, left: 0, right: 0, flexDirection: 'row', gap: 12,

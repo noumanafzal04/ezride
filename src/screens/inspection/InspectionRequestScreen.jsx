@@ -4,9 +4,10 @@ import {
     StatusBar, TextInput, Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DatePicker from 'react-native-date-picker';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Fonts from '../../constants/fonts';
 import { useCities } from '../../hooks/useLookup';
 import { useCurrentLocation } from '../../hooks/useLocation';
@@ -63,21 +64,7 @@ const InspectionRequestScreen = ({ navigation }) => {
     );
 
     // ── Date/time picker ──
-    const [pickerMode, setPickerMode] = useState(null); // 'date' | 'time'
-    const [draftDate, setDraftDate]   = useState(new Date());
-    const onPickerChange = (event, selected) => {
-        if (event.type === 'dismissed' || !selected) { setPickerMode(null); return; }
-        if (pickerMode === 'date') {
-            setDraftDate(selected);
-            setPickerMode(Platform.OS === 'ios' ? null : 'time');
-            if (Platform.OS === 'ios') setPreferredAt(selected);
-        } else {
-            const combined = new Date(draftDate);
-            combined.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
-            setPreferredAt(combined);
-            setPickerMode(null);
-        }
-    };
+    const [showPicker, setShowPicker] = useState(false);
 
     const submit = useSubmitInspection({
         onSuccess: () => {
@@ -144,10 +131,12 @@ const InspectionRequestScreen = ({ navigation }) => {
                 <MyInspectionsScreen navigation={navigation} embedded />
             ) : (
             <>
-            <ScrollView
+            <KeyboardAwareScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}
                 keyboardShouldPersistTaps="handled"
+                enableOnAndroid
+                extraScrollHeight={20}
             >
                 <View style={styles.body}>
                     {/* Intro */}
@@ -196,22 +185,24 @@ const InspectionRequestScreen = ({ navigation }) => {
                         <TextInput style={styles.input} placeholder="Area, street / showroom address" placeholderTextColor="#9CA3AF" value={address} onChangeText={setAddress} />
 
                         <Text style={styles.label}>Preferred date & time <Text style={styles.optional}>(optional)</Text></Text>
-                        <TouchableOpacity style={styles.selectBox} onPress={() => { setPickerMode('date'); setDraftDate(preferredAt || new Date()); }}>
+                        <TouchableOpacity style={styles.selectBox} onPress={() => setShowPicker(true)}>
                             <Icon name="calendar-clock" size={18} color="#9CA3AF" />
                             <Text style={preferredAt ? styles.selectVal : styles.selectPH}>
                                 {preferredAt ? fmtDisplay(preferredAt) : 'Select date & time'}
                             </Text>
                             <Icon name="chevron-down" size={18} color="#9CA3AF" />
                         </TouchableOpacity>
-                        {pickerMode && (
-                            <DateTimePicker
-                                value={draftDate}
-                                mode={pickerMode}
-                                display="default"
-                                minimumDate={pickerMode === 'date' ? new Date() : undefined}
-                                onChange={onPickerChange}
-                            />
-                        )}
+                        <DatePicker
+                            modal
+                            open={showPicker}
+                            date={preferredAt || new Date()}
+                            mode="datetime"
+                            minimumDate={new Date()}
+                            locale="en-US"
+                            theme="light"
+                            onConfirm={(d) => { setShowPicker(false); setPreferredAt(d); }}
+                            onCancel={() => setShowPicker(false)}
+                        />
                     </View>
 
                     {/* Contact */}
@@ -236,7 +227,7 @@ const InspectionRequestScreen = ({ navigation }) => {
                         />
                     </View>
                 </View>
-            </ScrollView>
+            </KeyboardAwareScrollView>
 
             <View style={[styles.bottomBtn, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity

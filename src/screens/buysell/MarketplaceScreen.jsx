@@ -6,7 +6,9 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Fonts from '../../constants/fonts';
+import Toast from 'react-native-toast-message';
 import { fileUrl } from '../../utils/media';
+import { formatMoney } from '../../utils/money';
 import { CarGridSkeleton, RowListSkeleton } from '../../components/Skeletons';
 import { useCurrentLocation } from '../../hooks/useLocation';
 import { useCities } from '../../hooks/useLookup';
@@ -15,7 +17,7 @@ import {
     useCarListings, useMyListings, useMarkListingSold, useDeleteListing,
 } from '../../hooks/useMarketplace';
 
-const money = (n) => (n == null ? '—' : `Rs. ${Number(n).toLocaleString()}`);
+const money = (n) => formatMoney(n);
 const TRANSMISSIONS = ['automatic', 'manual'];
 const FUELS = ['petrol', 'diesel', 'hybrid', 'electric', 'cng'];
 const SORTS = [
@@ -82,7 +84,7 @@ const MarketplaceScreen = ({ navigation }) => {
         !citySearch.trim() || c.name.toLowerCase().includes(citySearch.trim().toLowerCase()));
 
     const markSold = useMarkListingSold();
-    const del = useDeleteListing({ onError: (e) => Alert.alert('Failed', e.response?.data?.message || 'Try again.') });
+    const del = useDeleteListing({ onError: (e) => Toast.show({ type: 'error', text1: 'Could not delete', text2: e.response?.data?.message || 'Try again.' }) });
 
     const openFilters = () => { setDraft(filters); setSheet(true); };
     const applyFilters = () => { setFilters(draft); setSheet(false); };
@@ -189,7 +191,7 @@ const MarketplaceScreen = ({ navigation }) => {
                 <FlatList
                     data={myListings}
                     keyExtractor={i => String(i.id)}
-                    contentContainerStyle={styles.listPad}
+                    contentContainerStyle={[styles.listPad, { paddingBottom: insets.bottom + 24 }]}
                     renderItem={renderMine}
                     ListHeaderComponent={
                         <TouchableOpacity style={styles.postBtn} onPress={() => navigation.navigate('SellCar')} activeOpacity={0.9}>

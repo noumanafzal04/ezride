@@ -23,15 +23,17 @@ export const useServiceProviderMe = (options = {}) =>
 // Browse approved providers by category (+ optional city), infinite scroll.
 // With no explicit city filter, results are ranked by distance from the user's
 // current location (still shows ALL providers — location only orders them).
-export const useServiceProviders = (categoryId, cityId, options = {}) => {
+export const useServiceProviders = (categoryId, cityId, q, options = {}) => {
     const coords = useLocationStore((s) => s.coords);
     const near = (!cityId && coords) ? coords : null;
     const nearKey = near ? `${near.lat.toFixed(2)},${near.lng.toFixed(2)}` : 'no-loc';
+    const search = (q || '').trim();
     return useInfiniteQuery({
-        queryKey: ['service-providers', categoryId || 'all', cityId || 'all', nearKey],
+        queryKey: ['service-providers', categoryId || 'all', cityId || 'all', search || 'no-q', nearKey],
         queryFn: ({ pageParam = 1 }) => serviceService.providers({
             category_id: categoryId || undefined,
             city_id: cityId || undefined,
+            q: search || undefined,
             near_lat: near?.lat,
             near_lng: near?.lng,
             page: pageParam,
@@ -51,6 +53,22 @@ export const useServiceProvider = (id, options = {}) =>
         queryKey: ['service-provider', id],
         queryFn: () => serviceService.provider(id).then(r => r.data?.data?.provider),
         enabled: !!id,
+        ...options,
+    });
+
+// Reviews customers left for a provider (infinite scroll).
+export const useServiceProviderReviews = (id, options = {}) =>
+    useInfiniteQuery({
+        queryKey: ['service-provider-reviews', id],
+        queryFn: ({ pageParam = 1 }) =>
+            serviceService.providerReviews(id, { page: pageParam }).then(r => r.data?.data || {}),
+        enabled: !!id,
+        initialPageParam: 1,
+        getNextPageParam: (lastPage) => {
+            const m = lastPage?.meta;
+            return m && m.current_page < m.last_page ? m.current_page + 1 : undefined;
+        },
+        staleTime: 30 * 1000,
         ...options,
     });
 

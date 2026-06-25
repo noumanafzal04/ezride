@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
 import { useCities } from '../../hooks/useLookup';
@@ -37,7 +38,7 @@ const ListRentalScreen = ({ navigation }) => {
 
     const create = useCreateRental({
         onSuccess: () => { Toast.show({ type: 'success', text1: type === 'managed' ? 'Submitted to EZRide' : 'Rental listed' }); navigation.goBack(); },
-        onError: (e) => Alert.alert('Could not list', e.response?.data?.message || 'Please try again.'),
+        onError: (e) => Toast.show({ type: 'error', text1: 'Could not list', text2: e.response?.data?.message || 'Please try again.' }),
     });
 
     const pickImages = async () => {
@@ -81,7 +82,7 @@ const ListRentalScreen = ({ navigation }) => {
                 <View style={{ width: 24 }} />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+            <KeyboardAwareScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" enableOnAndroid extraScrollHeight={20}>
                 <View style={styles.typeRow}>
                     <TouchableOpacity style={[styles.typeCard, type === 'self' && styles.typeOn]} onPress={() => setType('self')}><Icon name="account" size={20} color={type === 'self' ? '#07163B' : '#9AA0A6'} /><Text style={[styles.typeTitle, type === 'self' && styles.typeTitleOn]}>List myself</Text></TouchableOpacity>
                     <TouchableOpacity style={[styles.typeCard, type === 'managed' && styles.typeOn]} onPress={() => setType('managed')}><Icon name="shield-check" size={20} color={type === 'managed' ? '#07163B' : '#9AA0A6'} /><Text style={[styles.typeTitle, type === 'managed' && styles.typeTitleOn]}>Manage by EZRide</Text></TouchableOpacity>
@@ -151,7 +152,7 @@ const ListRentalScreen = ({ navigation }) => {
                     {create.isPending ? <ActivityIndicator color="#07163B" /> : <Text style={styles.submitTxt}>{type === 'managed' ? 'Submit to EZRide' : 'List Rental'}</Text>}
                 </TouchableOpacity>
                 <View style={{ height: insets.bottom }} />
-            </ScrollView>
+            </KeyboardAwareScrollView>
 
             <SelectSheet visible={cityOpen} onClose={() => setCityOpen(false)} title="Select City" items={filteredCities} loading={citiesQuery.isLoading}
                 searchable search={citySearch} onSearch={setCitySearch} selectedId={city?.id} onSelect={(c) => { setCity(c); setCityOpen(false); }} />

@@ -6,6 +6,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Fonts from '../../constants/fonts';
 import { useCities } from '../../hooks/useLookup';
 import useMe from '../../hooks/useMe';
@@ -160,10 +161,12 @@ const ServiceProviderRegisterScreen = ({ navigation }) => {
         <View style={styles.root}>
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
             <Header />
-            <ScrollView
+            <KeyboardAwareScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ padding: 16, paddingBottom: 120 + insets.bottom }}
                 keyboardShouldPersistTaps="handled"
+                enableOnAndroid
+                extraScrollHeight={20}
             >
                 <View style={styles.intro}>
                     <Icon name="tools" size={20} color="#07163B" />
@@ -218,7 +221,7 @@ const ServiceProviderRegisterScreen = ({ navigation }) => {
                         multiline textAlignVertical="top"
                     />
                 </View>
-            </ScrollView>
+            </KeyboardAwareScrollView>
 
             <View style={[styles.bottomBtn, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity

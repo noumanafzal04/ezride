@@ -4,9 +4,10 @@ import {
     TouchableOpacity, StatusBar, Image, Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DatePicker from 'react-native-date-picker';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Fonts from '../../constants/fonts';
 import config from '../../config';
 import Input from '../../components/Input';
@@ -84,7 +85,7 @@ const EditProfileScreen = ({ navigation }) => {
                 <View style={{ width: 24 }} />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+            <KeyboardAwareScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} keyboardShouldPersistTaps="handled" enableOnAndroid extraScrollHeight={20}>
 
                 {/* Avatar */}
                 <View style={styles.avatarSection}>
@@ -149,23 +150,23 @@ const EditProfileScreen = ({ navigation }) => {
                     <Input placeholder="Address" value={address} onChangeText={setAddress} multiline numberOfLines={2} style={styles.inputSpacing} />
                     <Input placeholder="Bio" value={bio} onChangeText={setBio} multiline numberOfLines={3} style={{ marginBottom: 0 }} />
                 </View>
-            </ScrollView>
+            </KeyboardAwareScrollView>
 
-            {showDate && (
-                <DateTimePicker
-                    value={dob ? new Date(dob) : new Date(2000, 0, 1)}
-                    mode="date"
-                    display="default"
-                    maximumDate={new Date()}
-                    onChange={(e, sel) => {
-                        setShowDate(Platform.OS === 'ios');
-                        if (e.type !== 'dismissed' && sel) {
-                            const pad = (n) => String(n).padStart(2, '0');
-                            setDob(`${sel.getFullYear()}-${pad(sel.getMonth() + 1)}-${pad(sel.getDate())}`);
-                        }
-                    }}
-                />
-            )}
+            <DatePicker
+                modal
+                open={showDate}
+                date={dob ? new Date(dob) : new Date(2000, 0, 1)}
+                mode="date"
+                maximumDate={new Date()}
+                locale="en-US"
+                theme="light"
+                onConfirm={(sel) => {
+                    setShowDate(false);
+                    const pad = (n) => String(n).padStart(2, '0');
+                    setDob(`${sel.getFullYear()}-${pad(sel.getMonth() + 1)}-${pad(sel.getDate())}`);
+                }}
+                onCancel={() => setShowDate(false)}
+            />
 
             <View style={[styles.bottomBtns, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity style={styles.cancelBtn} onPress={() => navigation.goBack()} activeOpacity={0.85}>

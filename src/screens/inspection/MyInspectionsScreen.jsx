@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
+import { useBottomInset } from '../../hooks/useBottomInset';
 import Skeleton from '../../components/Skeleton';
 import { useMyInspections } from '../../hooks/useInspections';
 import { metaFor } from '../../constants/inspection';
@@ -26,6 +27,7 @@ const StatusBadge = ({ status }) => {
 };
 
 const MyInspectionsScreen = ({ navigation, embedded = false }) => {
+    const pb = useBottomInset();
     const query = useMyInspections();
     const items = (query.data?.pages || []).flatMap(p => p.requests || []);
 
@@ -89,7 +91,7 @@ const MyInspectionsScreen = ({ navigation, embedded = false }) => {
                 keyExtractor={item => String(item.id)}
                 renderItem={renderItem}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={items.length ? { paddingVertical: 8 } : styles.emptyWrap}
+                contentContainerStyle={items.length ? { paddingTop: 8, paddingBottom: embedded ? 8 : pb } : styles.emptyWrap}
                 refreshing={query.isRefetching}
                 onRefresh={query.refetch}
                 onEndReachedThreshold={0.5}

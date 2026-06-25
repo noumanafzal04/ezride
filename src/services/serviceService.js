@@ -7,6 +7,7 @@ const serviceService = {
     // Browse
     providers: (params) => api.get('/service-providers', { params }),
     provider: (id) => api.get(`/service-providers/${id}`),
+    providerReviews: (id, params) => api.get(`/service-providers/${id}/reviews`, { params }),
 
     // Bookings — customer
     createBooking: (providerId, payload) => api.post(`/service-providers/${providerId}/bookings`, payload),

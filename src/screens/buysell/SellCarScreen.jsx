@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
 import { useCities } from '../../hooks/useLookup';
@@ -60,7 +61,7 @@ const SellCarScreen = ({ navigation }) => {
             Toast.show({ type: 'success', text1: type === 'managed' ? 'Submitted to EZRide' : 'Listing posted' });
             navigation.goBack();
         },
-        onError: (e) => Alert.alert('Could not post', e.response?.data?.message || 'Please try again.'),
+        onError: (e) => Toast.show({ type: 'error', text1: 'Could not post', text2: e.response?.data?.message || 'Please try again.' }),
     });
 
     const pickImages = async () => {
@@ -122,7 +123,7 @@ const SellCarScreen = ({ navigation }) => {
                 <View style={{ width: 24 }} />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+            <KeyboardAwareScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled" enableOnAndroid extraScrollHeight={20}>
                 {/* Listing type */}
                 <View style={styles.typeRow}>
                     <TouchableOpacity style={[styles.typeCard, type === 'self' && styles.typeCardOn]} onPress={() => setType('self')} activeOpacity={0.85}>
@@ -240,7 +241,7 @@ const SellCarScreen = ({ navigation }) => {
                     )}
                 </TouchableOpacity>
                 <View style={{ height: insets.bottom }} />
-            </ScrollView>
+            </KeyboardAwareScrollView>
 
             <SelectSheet
                 visible={cityOpen} onClose={() => setCityOpen(false)} title="Select City"

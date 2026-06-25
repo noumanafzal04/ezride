@@ -5,6 +5,8 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
+import { PageSkeleton } from '../../components/Skeletons';
+import { useBottomInset } from '../../hooks/useBottomInset';
 import { useMembership, usePlans, useSubscribe } from '../../hooks/useSubscription';
 
 const MODULE = {
@@ -30,6 +32,7 @@ const StatusLine = ({ m }) => {
 };
 
 const MembershipScreen = ({ navigation }) => {
+    const pb = useBottomInset();
     const { data, isLoading } = useMembership();
     const { data: plans = [] } = usePlans();
     const subscribe = useSubscribe({
@@ -50,9 +53,9 @@ const MembershipScreen = ({ navigation }) => {
             </View>
 
             {isLoading ? (
-                <View style={styles.center}><ActivityIndicator color="#FFD400" /></View>
+                <PageSkeleton />
             ) : (
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, paddingBottom: pb }}>
                     <Text style={styles.lead}>Your access</Text>
                     {modules.map((m) => {
                         const meta = MODULE[m.module] || { label: m.module, icon: 'star' };

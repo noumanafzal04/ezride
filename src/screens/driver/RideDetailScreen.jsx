@@ -75,14 +75,6 @@ const mapDetail = (p) => {
     };
 };
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const CAR_IMAGES = [
-    'https://images.unsplash.com/photo-1609521263047-f8f205293f24?w=600&q=80',
-    'https://images.unsplash.com/photo-1621007947382-bb3c3994e3fb?w=600&q=80',
-    'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=600&q=80',
-];
-
 const TABS = ['Reviews', 'Vehicle Info', 'Recent Trips'];
 
 const timeAgo = (iso) => {
@@ -172,8 +164,8 @@ const RideDetailScreen = ({ navigation, route }) => {
         if (activeTab === 2 && tripsQ.hasNextPage && !tripsQ.isFetchingNextPage) tripsQ.fetchNextPage();
     };
 
-    // Real vehicle photo if we have one, otherwise the placeholder gallery
-    const images = offer?.carImage ? [offer.carImage] : CAR_IMAGES;
+    // Real vehicle photo(s) if we have any; empty → show a placeholder.
+    const images = offer?.carImage ? [offer.carImage] : [];
 
     const onImageScroll = (e) => {
         const index = Math.round(e.nativeEvent.contentOffset.x / width);
@@ -192,22 +184,28 @@ const RideDetailScreen = ({ navigation, route }) => {
             >
                 {/* ── CAR IMAGE SWIPER ── */}
                 <View style={styles.imageSection}>
-                    <FlatList
-                        data={images}
-                        keyExtractor={(_, i) => String(i)}
-                        horizontal
-                        pagingEnabled
-                        showsHorizontalScrollIndicator={false}
-                        onScroll={onImageScroll}
-                        scrollEventThrottle={16}
-                        renderItem={({ item }) => (
-                            <Image
-                                source={{ uri: item }}
-                                style={styles.carImage}
-                                resizeMode="cover"
-                            />
-                        )}
-                    />
+                    {images.length ? (
+                        <FlatList
+                            data={images}
+                            keyExtractor={(_, i) => String(i)}
+                            horizontal
+                            pagingEnabled
+                            showsHorizontalScrollIndicator={false}
+                            onScroll={onImageScroll}
+                            scrollEventThrottle={16}
+                            renderItem={({ item }) => (
+                                <Image
+                                    source={{ uri: item }}
+                                    style={styles.carImage}
+                                    resizeMode="cover"
+                                />
+                            )}
+                        />
+                    ) : (
+                        <View style={[styles.carImage, styles.carImagePh]}>
+                            <Icon name="car" size={56} color="#C7CBD1" />
+                        </View>
+                    )}
 
                     {/* Back button overlay */}
                     <TouchableOpacity
@@ -217,26 +215,30 @@ const RideDetailScreen = ({ navigation, route }) => {
                         <Icon name="arrow-left" size={20} color="#FFFFFF" />
                     </TouchableOpacity>
 
-                    {/* Image counter */}
-                    <View style={styles.imageCounter}>
-                        <Icon name="camera-outline" size={12} color="#FFFFFF" />
-                        <Text style={styles.imageCounterText}>
-                            {activeImage + 1}/{images.length}
-                        </Text>
-                    </View>
+                    {/* Image counter — only when more than one photo */}
+                    {images.length > 1 && (
+                        <View style={styles.imageCounter}>
+                            <Icon name="camera-outline" size={12} color="#FFFFFF" />
+                            <Text style={styles.imageCounterText}>
+                                {activeImage + 1}/{images.length}
+                            </Text>
+                        </View>
+                    )}
 
                     {/* Dot indicators */}
-                    <View style={styles.imageDots}>
-                        {images.map((_, i) => (
-                            <View
-                                key={i}
-                                style={[
-                                    styles.imageDot,
-                                    i === activeImage && styles.imageDotActive,
-                                ]}
-                            />
-                        ))}
-                    </View>
+                    {images.length > 1 && (
+                        <View style={styles.imageDots}>
+                            {images.map((_, i) => (
+                                <View
+                                    key={i}
+                                    style={[
+                                        styles.imageDot,
+                                        i === activeImage && styles.imageDotActive,
+                                    ]}
+                                />
+                            ))}
+                        </View>
+                    )}
                 </View>
 
                 <View style={styles.body}>
@@ -366,13 +368,18 @@ const RideDetailScreen = ({ navigation, route }) => {
 
                         {/* Date + seats + type */}
                         <View style={styles.rideMeta}>
-                            <View style={styles.rideMetaChip}>
-                                <Icon name="calendar-outline" size={13} color="#5D5F62" />
-                                <Text style={styles.rideMetaText}>Jan 12, 2025 · Wed · 6:00 pm</Text>
-                            </View>
+                            {!!offer?.date && (
+                                <View style={styles.rideMetaChip}>
+                                    <Icon name="calendar-outline" size={13} color="#5D5F62" />
+                                    <Text style={styles.rideMetaText}>{offer.date}</Text>
+                                </View>
+                            )}
                             <View style={styles.rideMetaChip}>
                                 <Icon name="account-multiple-outline" size={13} color="#5D5F62" />
-                                <Text style={styles.rideMetaText}>2 seats left of 4</Text>
+                                <Text style={styles.rideMetaText}>
+                                    {offer?.seatsLeft ?? 0} seat{(offer?.seatsLeft ?? 0) === 1 ? '' : 's'} left
+                                    {offer?.capacity ? ` of ${offer.capacity}` : ''}
+                                </Text>
                             </View>
                         </View>
                     </View>
@@ -604,6 +611,7 @@ const styles = StyleSheet.create({
         width,
         height: 240,
     },
+    carImagePh: { backgroundColor: '#F0F1F3', alignItems: 'center', justifyContent: 'center' },
     backBtn: {
         position: 'absolute',
         top: 52,

@@ -12,6 +12,10 @@ import { navigate } from '../navigation/navigationRef';
 // Where a notification tap should land, by notification `type`.
 const routeFor = (data = {}) => {
     const t = data.type || '';
+    if (t === 'chat_message' || t.startsWith('chat')) {
+        const id = Number(data.conversation_id);
+        return id ? ['ChatDetail', { conversationId: id }] : ['Messages'];
+    }
     if (t.startsWith('service_booking')) return ['MyServiceRequests'];
     if (t.startsWith('listing')) return ['Marketplace'];
     if (t.startsWith('inspection')) return ['MyInspections'];
@@ -38,11 +42,21 @@ export const useFcm = () => {
         // Foreground push → toast + refresh badges (no OS banner while app is open).
         const offMessage = onMessage(m, (remote) => {
             const n = remote?.notification;
+            const data = remote?.data || {};
             if (n?.title || n?.body) {
                 Toast.show({ type: 'info', text1: n.title || 'Notification', text2: n.body || undefined, visibilityTime: 4000 });
             }
-            qc.invalidateQueries({ queryKey: ['notifications'] });
-            qc.invalidateQueries({ queryKey: ['notifications-unread'] });
+            if (data.type === 'chat_message' || String(data.type || '').startsWith('chat')) {
+                // Chat push → refresh the unread badge, inbox, and the open thread.
+                qc.invalidateQueries({ queryKey: ['chat-unread'] });
+                qc.invalidateQueries({ queryKey: ['conversations'] });
+                if (data.conversation_id) {
+                    qc.invalidateQueries({ queryKey: ['messages', Number(data.conversation_id)] });
+                }
+            } else {
+                qc.invalidateQueries({ queryKey: ['notifications'] });
+                qc.invalidateQueries({ queryKey: ['notifications-unread'] });
+            }
         });
 
         // Tap while backgrounded → route to the relevant screen.

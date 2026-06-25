@@ -6,14 +6,16 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Fonts from '../../constants/fonts';
+import Toast from 'react-native-toast-message';
 import { fileUrl } from '../../utils/media';
+import { formatMoney } from '../../utils/money';
 import { DetailSkeleton } from '../../components/Skeletons';
 import chatService from '../../services/chatService';
 import { useCarListing, useMarkListingSold, useDeleteListing } from '../../hooks/useMarketplace';
 
 const { width } = Dimensions.get('window');
 const SUPPORT_PHONE = '+923000000000'; // EZRide managed-sales line
-const money = (n) => (n == null ? 'Price on request' : `Rs. ${Number(n).toLocaleString()}`);
+const money = (n) => formatMoney(n, { fallback: 'Price on request' });
 const Cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '—');
 
 const SPEC_ICONS = {
@@ -27,8 +29,8 @@ const CarDetailScreen = ({ navigation, route }) => {
     const { data: c, isLoading, isError } = useCarListing(id);
     const [active, setActive] = useState(0);
 
-    const markSold = useMarkListingSold({ onSuccess: () => Alert.alert('Done', 'Marked as sold.') });
-    const del = useDeleteListing({ onSuccess: () => navigation.goBack(), onError: (e) => Alert.alert('Failed', e.response?.data?.message || 'Try again.') });
+    const markSold = useMarkListingSold({ onSuccess: () => Toast.show({ type: 'success', text1: 'Marked as sold' }) });
+    const del = useDeleteListing({ onSuccess: () => navigation.goBack(), onError: (e) => Toast.show({ type: 'error', text1: 'Could not delete', text2: e.response?.data?.message || 'Try again.' }) });
 
     const call = (phone) => phone && Linking.openURL(`tel:${phone}`);
 
@@ -38,7 +40,7 @@ const CarDetailScreen = ({ navigation, route }) => {
             const conv = res.data?.data;
             if (conv?.id) navigation.navigate('ChatDetail', { conversationId: conv.id, conversation: conv });
         } catch (e) {
-            Alert.alert('Could not open chat', e.response?.data?.message || 'Try again.');
+            Toast.show({ type: 'error', text1: 'Could not open chat', text2: e.response?.data?.message || 'Try again.' });
         }
     };
 

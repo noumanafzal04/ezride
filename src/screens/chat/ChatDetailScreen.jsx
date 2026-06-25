@@ -14,6 +14,7 @@ import {
     useConversationForBooking, useConversationForServiceBooking,
 } from '../../hooks/useChat';
 import { useConversationRealtime, useRealtimeConnected } from '../../hooks/useRealtime';
+import { ChatSkeleton } from '../../components/Skeletons';
 
 const fmtTime = (iso) => {
     if (!iso) return '';
@@ -66,7 +67,7 @@ const ChatDetailScreen = ({ navigation, route }) => {
     useConversationRealtime(conversationId, onLiveMessage);
 
     const doSend = (body, onErr) => {
-        if (!body || !conversationId || send.isPending) return;
+        if (!body || !conversationId) return;
         send.mutate(body, {
             onError: (err) => {
                 onErr?.();
@@ -85,13 +86,20 @@ const ChatDetailScreen = ({ navigation, route }) => {
     const sendQuick = (q) => doSend(q);
 
     // Only on a fresh chat with no messages yet.
-    const showQuick = !isClosed && !messagesQuery.isLoading && messages.length === 0 && !send.isPending;
+    const showQuick = !isClosed && !messagesQuery.isLoading && messages.length === 0;
 
     const renderMessage = ({ item }) => (
         <View style={[styles.msgRow, item.is_mine && styles.msgRowMine]}>
             <View style={[styles.bubble, item.is_mine ? styles.bubbleMine : styles.bubbleTheirs]}>
                 <Text style={styles.msgText}>{item.body}</Text>
-                <Text style={styles.msgTime}>{fmtTime(item.created_at)}</Text>
+                <View style={styles.msgMeta}>
+                    <Text style={styles.msgTime}>{fmtTime(item.created_at)}</Text>
+                    {item.is_mine && (
+                        item._status === 'sending'
+                            ? <Icon name="clock-outline" size={11} color="#9AA0A6" />
+                            : <Icon name="check" size={13} color="#1D9E4B" />
+                    )}
+                </View>
             </View>
         </View>
     );
@@ -150,7 +158,7 @@ const ChatDetailScreen = ({ navigation, route }) => {
             )}
 
             {messagesQuery.isLoading ? (
-                <View style={styles.center}><ActivityIndicator color="#FFD400" /></View>
+                <ChatSkeleton />
             ) : (
                 <FlatList
                     data={messages}
@@ -195,9 +203,9 @@ const ChatDetailScreen = ({ navigation, route }) => {
                             multiline
                         />
                         <TouchableOpacity
-                            style={[styles.sendBtn, (!text.trim() || send.isPending) && styles.sendBtnDisabled]}
+                            style={[styles.sendBtn, !text.trim() && styles.sendBtnDisabled]}
                             onPress={handleSend}
-                            disabled={!text.trim() || send.isPending}
+                            disabled={!text.trim()}
                         >
                             <Icon name="send" size={18} color="#111111" />
                         </TouchableOpacity>
@@ -244,7 +252,8 @@ const styles = StyleSheet.create({
     bubbleTheirs: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAEDEE', borderBottomLeftRadius: 4 },
     bubbleMine: { backgroundColor: '#FFF4C2', borderBottomRightRadius: 4 },
     msgText: { fontSize: 13.5, fontFamily: Fonts.regular, color: '#202223', lineHeight: 19 },
-    msgTime: { fontSize: 10, fontFamily: Fonts.regular, color: '#9AA0A6', alignSelf: 'flex-end' },
+    msgMeta: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-end' },
+    msgTime: { fontSize: 10, fontFamily: Fonts.regular, color: '#9AA0A6' },
 
     // Quick starters — only on an empty chat, small pills above the input.
     quickWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 12, paddingTop: 8 },

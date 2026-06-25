@@ -4,17 +4,18 @@ import {
     Image, Dimensions, Linking, TextInput, Alert,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
 import { fileUrl } from '../../utils/media';
+import { formatMoney } from '../../utils/money';
 import { DetailSkeleton } from '../../components/Skeletons';
+import DateTimeField from '../../components/DateTimeField';
 import { useRental, useBookRental } from '../../hooks/useRentals';
 
 const { width } = Dimensions.get('window');
 const SUPPORT_PHONE = '+923000000000';
-const money = (n) => (n == null ? 'On request' : `Rs. ${Number(n).toLocaleString()}`);
+const money = (n) => formatMoney(n, { fallback: 'On request' });
 const Cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : '—');
 const ymd = (d) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
 const niceDate = (d) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -27,13 +28,13 @@ const RentalDetailScreen = ({ navigation, route }) => {
     const [active, setActive] = useState(0);
     const [start, setStart] = useState(null);
     const [end, setEnd] = useState(null);
+    const [pickupTime, setPickupTime] = useState(null);
     const [pickup, setPickup] = useState('');
     const [withDriver, setWithDriver] = useState(true);
-    const [picker, setPicker] = useState(null); // 'start' | 'end'
 
     const book = useBookRental({
         onSuccess: () => { Toast.show({ type: 'success', text1: 'Request sent', text2: 'The owner will confirm shortly.' }); navigation.goBack(); },
-        onError: (e) => Alert.alert('Could not book', e.response?.data?.message || 'Try again.'),
+        onError: (e) => Toast.show({ type: 'error', text1: 'Could not book', text2: e.response?.data?.message || 'Try again.' }),
     });
 
     if (isLoading) return <View style={styles.root}><StatusBar backgroundColor="#000" barStyle="light-content" /><DetailSkeleton /></View>;
@@ -54,7 +55,11 @@ const RentalDetailScreen = ({ navigation, route }) => {
 
     const submit = () => {
         if (!start || !end) { Alert.alert('Pick dates', 'Choose pickup and return dates.'); return; }
-        book.mutate({ id: c.id, payload: { start_date: ymd(start), end_date: ymd(end), with_driver: effectiveDriver, pickup_location: pickup.trim() || null } });
+        const timeNote = pickupTime
+            ? `Pickup ~${pickupTime.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`
+            : '';
+        const loc = [pickup.trim(), timeNote].filter(Boolean).join(' · ') || null;
+        book.mutate({ id: c.id, payload: { start_date: ymd(start), end_date: ymd(end), with_driver: effectiveDriver, pickup_location: loc } });
     };
 
     return (
@@ -77,6 +82,11 @@ const RentalDetailScreen = ({ navigation, route }) => {
 
                 <View style={styles.body}>
                     <Text style={styles.title}>{c.title}</Text>
+                    <View style={styles.titleMeta}>
+                        <Icon name="star" size={14} color={c.rating != null ? '#FFC107' : '#D7DBDE'} />
+                        <Text style={styles.titleMetaTxt}>{c.rating != null ? `${Number(c.rating).toFixed(1)} owner rating` : 'New owner'}</Text>
+                        {!!c.city?.name && <><Text style={styles.titleDot}>·</Text><Icon name="map-marker" size={13} color="#9AA0A6" /><Text style={styles.titleMetaTxt}>{c.city.name}</Text></>}
+                    </View>
                     <Text style={styles.price}>{money(rate)}<Text style={styles.perDay}> / day{effectiveDriver ? ' · with driver' : ' · self-drive'}</Text></Text>
 
                     {/* Driver mode toggle for "both" */}
@@ -111,15 +121,23 @@ const RentalDetailScreen = ({ navigation, route }) => {
                         <>
                             <Text style={styles.section}>Rental dates</Text>
                             <View style={styles.dateRow}>
-                                <TouchableOpacity style={styles.dateBox} onPress={() => setPicker('start')}>
-                                    <Text style={styles.dateLabel}>Pickup</Text>
-                                    <Text style={start ? styles.dateVal : styles.datePh}>{start ? niceDate(start) : 'Select'}</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.dateBox} onPress={() => setPicker('end')}>
-                                    <Text style={styles.dateLabel}>Return</Text>
-                                    <Text style={end ? styles.dateVal : styles.datePh}>{end ? niceDate(end) : 'Select'}</Text>
-                                </TouchableOpacity>
+                                <DateTimeField
+                                    label="Pickup date" mode="date" value={start}
+                                    minimumDate={new Date()} placeholder="Select"
+                                    onChange={(d) => { setStart(d); if (end && end < d) setEnd(null); }}
+                                    style={styles.flex1}
+                                />
+                                <DateTimeField
+                                    label="Return date" mode="date" value={end}
+                                    minimumDate={start || new Date()} placeholder="Select"
+                                    onChange={setEnd} style={styles.flex1}
+                                />
                             </View>
+                            <View style={{ height: 12 }} />
+                            <DateTimeField
+                                label="Preferred pickup time" mode="time" value={pickupTime}
+                                placeholder="Any time" icon="clock-outline" onChange={setPickupTime}
+                            />
                             <TextInput style={styles.input} value={pickup} onChangeText={setPickup} placeholder="Pickup location (optional)" placeholderTextColor="#9AA0A6" />
                             {!!estimate && <Text style={styles.estimate}>Estimate: {money(estimate)} for {days} day{days > 1 ? 's' : ''}</Text>}
                         </>
@@ -145,15 +163,6 @@ const RentalDetailScreen = ({ navigation, route }) => {
                     </>
                 )}
             </View>
-
-            {picker && (
-                <DateTimePicker
-                    value={(picker === 'start' ? start : end) || new Date()}
-                    mode="date"
-                    minimumDate={picker === 'end' && start ? start : new Date()}
-                    onChange={(e, d) => { setPicker(null); if (e.type !== 'dismissed' && d) { picker === 'start' ? setStart(d) : setEnd(d); } }}
-                />
-            )}
         </View>
     );
 };
@@ -174,7 +183,11 @@ const styles = StyleSheet.create({
 
     body: { padding: 18 },
     title: { fontSize: 20, fontFamily: Fonts.bold, color: '#07163B' },
-    price: { fontSize: 20, fontFamily: Fonts.bold, color: '#07163B', marginTop: 4 },
+    titleMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+    titleMetaTxt: { fontSize: 12.5, fontFamily: Fonts.medium, color: '#5D5F62' },
+    titleDot: { fontSize: 12.5, color: '#C7CBD1', marginHorizontal: 2 },
+    flex1: { flex: 1 },
+    price: { fontSize: 20, fontFamily: Fonts.bold, color: '#07163B', marginTop: 10 },
     perDay: { fontSize: 12.5, fontFamily: Fonts.regular, color: '#9AA0A6' },
     toggle: { flexDirection: 'row', gap: 8, marginTop: 12 },
     toggleBtn: { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: 10, borderWidth: 1.5, borderColor: '#EAEDEE' },

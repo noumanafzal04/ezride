@@ -26,6 +26,15 @@ export const useRentals = (filters = {}, options = {}) => {
     });
 };
 
+// Distinct make/model list for the "specific model" filter.
+export const useRentalModels = (options = {}) =>
+    useQuery({
+        queryKey: ['rental-models'],
+        queryFn: () => rentalService.models().then(r => r.data?.data?.models || []),
+        staleTime: 10 * 60 * 1000,
+        ...options,
+    });
+
 export const useRental = (id, options = {}) =>
     useQuery({
         queryKey: ['rental', id],
@@ -90,6 +99,19 @@ export const useCancelRentalBooking = (options = {}) => {
     return useMutation({
         mutationFn: (id) => rentalService.cancelBooking(id),
         onSuccess: (...a) => { invalidate(qc); options.onSuccess?.(...a); },
+        onError: options.onError,
+    });
+};
+
+export const useRateRentalBooking = (options = {}) => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: ({ id, payload }) => rentalService.rateBooking(id, payload),
+        onSuccess: (...a) => {
+            invalidate(qc);
+            qc.invalidateQueries({ queryKey: ['rentals'] }); // owner rating may change
+            options.onSuccess?.(...a);
+        },
         onError: options.onError,
     });
 };

@@ -6,6 +6,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
 import { useTrackInspection } from '../../hooks/useInspections';
+import { useBottomInset } from '../../hooks/useBottomInset';
 import { metaFor, INSPECTION_FLOW, conditionMeta } from '../../constants/inspection';
 
 const fmtDateTime = (iso) => {
@@ -16,6 +17,7 @@ const fmtDateTime = (iso) => {
 };
 
 const TrackInspectionScreen = ({ navigation, route }) => {
+    const pb = useBottomInset();
     const [code, setCode] = useState('');
     const [token, setToken] = useState(route?.params?.token || null);
 
@@ -42,7 +44,7 @@ const TrackInspectionScreen = ({ navigation, route }) => {
                 <View style={styles.headerSpacer} />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.body, { paddingBottom: pb }]} keyboardShouldPersistTaps="handled">
                 <Text style={styles.hint}>Enter the tracking code from your confirmation email.</Text>
 
                 <View style={styles.searchRow}>

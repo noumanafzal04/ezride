@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
+import { useBottomInset } from '../../hooks/useBottomInset';
 
 const FAQS = [
     {
@@ -36,6 +37,7 @@ const CONTACT = [
 ];
 
 const HelpSupportScreen = ({navigation}) => {
+    const pb = useBottomInset();
     const [openFaq, setOpenFaq] = useState(null);
 
     return (
@@ -49,7 +51,7 @@ const HelpSupportScreen = ({navigation}) => {
                 <View style={{width: 24}}/>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: 40}}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: pb}}>
 
                 {/* Hero Banner */}
                 <View style={styles.heroBanner}>

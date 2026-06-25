@@ -6,6 +6,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
+import { useBottomInset } from '../../hooks/useBottomInset';
 import ReviewSheet from '../../components/ReviewSheet';
 import useUserStore from '../../store/userStore';
 import { useRideHistory } from '../../hooks/useRideHistory';
@@ -19,6 +20,7 @@ const fmtDate = (iso) => {
 };
 
 const RideHistoryScreen = ({ navigation }) => {
+    const pb = useBottomInset();
     const user = useUserStore(s => s.user);
     const isDriver = user?.user_type === 'driver';
     const [reviewItem, setReviewItem] = useState(null);
@@ -97,7 +99,7 @@ const RideHistoryScreen = ({ navigation }) => {
                 data={rides}
                 keyExtractor={item => String(item.id)}
                 renderItem={renderCard}
-                contentContainerStyle={styles.list}
+                contentContainerStyle={[styles.list, { paddingBottom: pb }]}
                 showsVerticalScrollIndicator={false}
                 refreshing={query.isRefetching}
                 onRefresh={query.refetch}

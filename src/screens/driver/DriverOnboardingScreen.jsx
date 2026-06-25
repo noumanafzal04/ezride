@@ -5,9 +5,10 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DatePicker from 'react-native-date-picker';
 import { useMutation } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Colors from '../../constants/colors';
 import Fonts from '../../constants/fonts';
 import { useCities, useVehicleMakes, useVehicleModels } from '../../hooks/useLookup';
@@ -301,12 +302,10 @@ const DriverOnboardingScreen = ({ navigation }) => {
         }
     };
 
-    const onDateChange = (_, selected) => {
-        setShowDatePicker(Platform.OS === 'ios');
-        if (selected) {
-            setDobDate(selected);
-            setDob(selected.toISOString().split('T')[0]);
-        }
+    const onDateConfirm = (selected) => {
+        setShowDatePicker(false);
+        setDobDate(selected);
+        setDob(selected.toISOString().split('T')[0]);
     };
 
     // ── Step renders ──────────────────────────────────────────────────────────
@@ -326,15 +325,17 @@ const DriverOnboardingScreen = ({ navigation }) => {
                 </Text>
                 <Icon name="calendar-range" size={20} color="#9CA3AF" />
             </TouchableOpacity>
-            {showDatePicker && (
-                <DateTimePicker
-                    value={dobDate}
-                    mode="date"
-                    display="default"
-                    maximumDate={new Date()}
-                    onChange={onDateChange}
-                />
-            )}
+            <DatePicker
+                modal
+                open={showDatePicker}
+                date={dobDate}
+                mode="date"
+                maximumDate={new Date()}
+                locale="en-US"
+                theme="light"
+                onConfirm={onDateConfirm}
+                onCancel={() => setShowDatePicker(false)}
+            />
 
             <Text style={styles.fieldLabel}>Gender</Text>
             <View style={styles.genderRow}>
@@ -546,10 +547,12 @@ const DriverOnboardingScreen = ({ navigation }) => {
                 <View style={{ width: 40 }} />
             </View>
 
-            <ScrollView
+            <KeyboardAwareScrollView
                 contentContainerStyle={[styles.scroll, { paddingBottom: 110 + insets.bottom }]}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
+                enableOnAndroid
+                extraScrollHeight={20}
             >
                 <View style={styles.card}>
                     <Text style={styles.stepText}>Step {step} of {TOTAL_STEPS}</Text>
@@ -562,7 +565,7 @@ const DriverOnboardingScreen = ({ navigation }) => {
                     {step === 3 && renderStep3()}
                     {step === 4 && renderStep4()}
                 </View>
-            </ScrollView>
+            </KeyboardAwareScrollView>
 
             {/* Footer — accounts for Android nav bar */}
             <View style={[styles.footer, { paddingBottom: 16 + insets.bottom }]}>

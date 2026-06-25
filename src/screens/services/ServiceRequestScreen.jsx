@@ -4,9 +4,10 @@ import {
     StatusBar, TextInput, Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DatePicker from 'react-native-date-picker';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Fonts from '../../constants/fonts';
 import { useCreateServiceBooking } from '../../hooks/useServices';
 
@@ -28,22 +29,7 @@ const ServiceRequestScreen = ({ navigation, route }) => {
     const [carInfo, setCarInfo] = useState('');
     const [notes, setNotes] = useState('');
     const [scheduledAt, setScheduledAt] = useState(null);
-    const [pickerMode, setPickerMode] = useState(null);
-    const [draftDate, setDraftDate] = useState(new Date());
-
-    const onPickerChange = (event, selected) => {
-        if (event.type === 'dismissed' || !selected) { setPickerMode(null); return; }
-        if (pickerMode === 'date') {
-            setDraftDate(selected);
-            setPickerMode(Platform.OS === 'ios' ? null : 'time');
-            if (Platform.OS === 'ios') setScheduledAt(selected);
-        } else {
-            const combined = new Date(draftDate);
-            combined.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
-            setScheduledAt(combined);
-            setPickerMode(null);
-        }
-    };
+    const [showPicker, setShowPicker] = useState(false);
 
     const create = useCreateServiceBooking({
         onSuccess: () => {
@@ -82,10 +68,12 @@ const ServiceRequestScreen = ({ navigation, route }) => {
                 <View style={styles.headerSpacer} />
             </View>
 
-            <ScrollView
+            <KeyboardAwareScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ padding: 16, paddingBottom: 120 + insets.bottom }}
                 keyboardShouldPersistTaps="handled"
+                enableOnAndroid
+                extraScrollHeight={20}
             >
                 <View style={styles.providerCard}>
                     <View style={styles.avatar}><Text style={styles.avatarInitial}>{(provider.business_name?.[0] || '?').toUpperCase()}</Text></View>
@@ -127,21 +115,29 @@ const ServiceRequestScreen = ({ navigation, route }) => {
                 )}
 
                 <Text style={styles.label}>Preferred date & time <Text style={styles.optional}>(optional)</Text></Text>
-                <TouchableOpacity style={styles.selectBox} onPress={() => { setPickerMode('date'); setDraftDate(scheduledAt || new Date()); }}>
+                <TouchableOpacity style={styles.selectBox} onPress={() => setShowPicker(true)}>
                     <Icon name="calendar-clock" size={18} color="#9CA3AF" />
                     <Text style={scheduledAt ? styles.selectVal : styles.selectPH}>{scheduledAt ? fmtDisplay(scheduledAt) : 'Select date & time'}</Text>
                     <Icon name="chevron-down" size={18} color="#9CA3AF" />
                 </TouchableOpacity>
-                {pickerMode && (
-                    <DateTimePicker value={draftDate} mode={pickerMode} display="default" minimumDate={pickerMode === 'date' ? new Date() : undefined} onChange={onPickerChange} />
-                )}
+                <DatePicker
+                    modal
+                    open={showPicker}
+                    date={scheduledAt || new Date()}
+                    mode="datetime"
+                    minimumDate={new Date()}
+                    locale="en-US"
+                    theme="light"
+                    onConfirm={(d) => { setShowPicker(false); setScheduledAt(d); }}
+                    onCancel={() => setShowPicker(false)}
+                />
 
                 <Text style={styles.label}>Your car <Text style={styles.optional}>(optional)</Text></Text>
                 <TextInput style={styles.input} placeholder="e.g. Toyota Corolla 2018" placeholderTextColor="#9CA3AF" value={carInfo} onChangeText={setCarInfo} />
 
                 <Text style={styles.label}>Notes <Text style={styles.optional}>(optional)</Text></Text>
                 <TextInput style={[styles.input, styles.textArea]} placeholder="Describe the problem / what you need" placeholderTextColor="#9CA3AF" value={notes} onChangeText={setNotes} multiline textAlignVertical="top" />
-            </ScrollView>
+            </KeyboardAwareScrollView>
 
             <View style={[styles.bottomBtn, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity

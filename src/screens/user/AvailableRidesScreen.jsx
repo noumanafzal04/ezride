@@ -5,32 +5,43 @@ import {
     Image, ActivityIndicator, Linking, Alert, Switch,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DatePicker from 'react-native-date-picker';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
-import config from '../../config';
+import { fileUrl } from '../../utils/media';
 import { useAvailableRides, useBookSeat } from '../../hooks/useAvailableRides';
 import { useMyBookings, useCancelBooking } from '../../hooks/useMyBookings';
 import { useRideAlerts, useCreateRideAlert, useDeleteRideAlert } from '../../hooks/useRideAlerts';
 import { useRidesRealtime, useRealtimeConnected } from '../../hooks/useRealtime';
 import { useCities } from '../../hooks/useLookup';
 import SelectSheet from '../../components/SelectSheet';
-import { RowListSkeleton } from '../../components/Skeletons';
+import Avatar from '../../components/Avatar';
+import { RideCardSkeleton } from '../../components/Skeletons';
+import { useBottomInset } from '../../hooks/useBottomInset';
 
 const ymd = (d) => {
     const p = (n) => String(n).padStart(2, '0');
     return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
 
-// Build a full file URL from a storage path (e.g. "vehicles/x.jpg")
-const FILE_BASE = config.BASE_URL.replace(/\/api\/v1\/?$/, '/');
-const fileUrl = (path) => (path ? `${FILE_BASE}storage/${path}` : null);
-
 const fmtDate = (iso) => {
     if (!iso) return '';
     const d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
     return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true });
+};
+
+// "2026-06-18T..." → "3h ago" / "2d ago"
+const timeAgo = (iso) => {
+    if (!iso) return '';
+    const diff = Date.now() - new Date(iso).getTime();
+    if (isNaN(diff)) return '';
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
 };
 
 // Map a backend ride_post into the card shape this screen renders
@@ -51,19 +62,19 @@ const mapRide = (p) => {
         to: [p.to?.city?.name, p.to?.address].filter(Boolean).join(' · ') || '—',
         date: fmtDate(p.departure_at),
         vehicle: [v.model?.make, v.model?.name].filter(Boolean).join(' ') || 'Vehicle',
-        plate: '',
+        plate: v.registration_number || '',
         type: isPrivate ? 'Private' : 'Shared',
         online: true,
-        postedAgo: '',
+        postedAgo: timeAgo(p.created_at),
+        photo: driver.profile_image || null,   // full URL from backend
         carImage: fileUrl(v.vehicle_image_path),
     };
 };
 
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const AvailableRidesScreen = ({ navigation }) => {
+const AvailableRidesScreen = ({ navigation, embedded = false }) => {
+    const pb = useBottomInset();
     // Live while the socket is up; poll only as a fallback if it drops.
     const liveConnected = useRealtimeConnected();
     const fallbackPoll = liveConnected ? false : 15000;
@@ -355,9 +366,7 @@ const AvailableRidesScreen = ({ navigation }) => {
                     {/* Left: avatar + driver */}
                     <View style={styles.driverRow}>
                         <View style={styles.avatarWrap}>
-                            <View style={styles.avatar}>
-                                <Icon name="account" size={20} color="#CCCCCC" />
-                            </View>
+                            <Avatar uri={item.photo} name={item.name} size={40} bg="#EEEEEE" color="#9AA0A6" />
                             {item.online && <View style={styles.onlineDot} />}
                         </View>
                         <View style={styles.driverInfo}>
@@ -373,11 +382,11 @@ const AvailableRidesScreen = ({ navigation }) => {
 
                     {/* Right: car image thumbnail */}
                     <View style={styles.carImageWrap}>
-                        <Image
-                            source={{ uri: item.carImage }}
-                            style={styles.carImage}
-                            resizeMode="cover"
-                        />
+                        {item.carImage ? (
+                            <Image source={{ uri: item.carImage }} style={styles.carImage} resizeMode="cover" />
+                        ) : (
+                            <View style={styles.carImagePh}><Icon name="car" size={26} color="#C7CBD1" /></View>
+                        )}
                         {!!item.plate && (
                             <View style={styles.carImageOverlay}>
                                 <Text style={styles.carPlateOverlay}>{item.plate}</Text>
@@ -434,10 +443,6 @@ const AvailableRidesScreen = ({ navigation }) => {
 
                 {/* Actions */}
                 <View style={styles.actionRow}>
-                    <TouchableOpacity style={styles.chatIconBtn}>
-                        <Icon name="message-outline" size={16} color="#5D5F62" />
-                    </TouchableOpacity>
-
                     {alreadySent ? (
                         <View style={styles.sentBtn}>
                             <Icon name="check-circle-outline" size={15} color="#109F2A" />
@@ -542,20 +547,21 @@ const AvailableRidesScreen = ({ navigation }) => {
 
     return (
         <View style={styles.root}>
-            <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
-
-            {/* Static header */}
-            <View style={styles.header}>
-                {navigation.canGoBack() ? (
-                    <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack}>
-                        <Icon name="arrow-left" size={24} color="#07163B" />
-                    </TouchableOpacity>
-                ) : <View style={styles.headerBack} />}
-                <Text style={styles.headerTitle}>Available Rides</Text>
-                <TouchableOpacity style={styles.filterBtn}>
-                    <Icon name="tune-variant" size={20} color="#07163B" />
-                </TouchableOpacity>
-            </View>
+            {!embedded && (
+                <>
+                    <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+                    {/* Static header */}
+                    <View style={styles.header}>
+                        {navigation.canGoBack() ? (
+                            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack}>
+                                <Icon name="arrow-left" size={24} color="#07163B" />
+                            </TouchableOpacity>
+                        ) : <View style={styles.headerBack} />}
+                        <Text style={styles.headerTitle}>Available Rides</Text>
+                        <View style={styles.headerBack} />
+                    </View>
+                </>
+            )}
 
             {currentRide ? (
                 renderActiveRide()
@@ -578,7 +584,7 @@ const AvailableRidesScreen = ({ navigation }) => {
                         renderItem={renderRide}
                         ListHeaderComponent={<ListHeader />}
                         showsVerticalScrollIndicator={false}
-                        contentContainerStyle={styles.list}
+                        contentContainerStyle={[styles.list, !embedded && { paddingBottom: pb }]}
                         keyboardShouldPersistTaps="handled"
                         refreshing={ridesQuery.isRefetching}
                         onRefresh={ridesQuery.refetch}
@@ -595,7 +601,7 @@ const AvailableRidesScreen = ({ navigation }) => {
                         }
                         ListEmptyComponent={
                             ridesQuery.isLoading ? (
-                                <RowListSkeleton />
+                                <RideCardSkeleton />
                             ) : (
                                 <View style={styles.emptyState}>
                                     <Icon name="car-off" size={46} color="#DDDDDD" />
@@ -623,20 +629,18 @@ const AvailableRidesScreen = ({ navigation }) => {
                         <>
                             {/* Driver + car thumbnail */}
                             <View style={styles.sheetDriverRow}>
-                                <View style={styles.sheetAvatar}>
-                                    <Icon name="account" size={20} color="#CCCCCC" />
-                                </View>
+                                <Avatar uri={bookingModal.photo} name={bookingModal.name} size={40} bg="#EEEEEE" color="#9AA0A6" />
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.sheetDriverName}>{bookingModal.name}</Text>
                                     <Text style={styles.sheetDriverMeta}>
                                         {bookingModal.vehicle} · {bookingModal.plate}
                                     </Text>
                                 </View>
-                                <Image
-                                    source={{ uri: bookingModal.carImage }}
-                                    style={styles.sheetCarThumb}
-                                    resizeMode="cover"
-                                />
+                                {bookingModal.carImage ? (
+                                    <Image source={{ uri: bookingModal.carImage }} style={styles.sheetCarThumb} resizeMode="cover" />
+                                ) : (
+                                    <View style={[styles.sheetCarThumb, styles.sheetCarPh]}><Icon name="car" size={22} color="#C7CBD1" /></View>
+                                )}
                             </View>
 
                             {/* Route */}
@@ -749,19 +753,18 @@ const AvailableRidesScreen = ({ navigation }) => {
                 onSelect={onCitySelect}
             />
 
-            {/* ── Date picker ───────────────────────────────────────────────── */}
-            {showDate && (
-                <DateTimePicker
-                    value={dateObj || new Date()}
-                    mode="date"
-                    display="default"
-                    minimumDate={new Date()}
-                    onChange={(event, selected) => {
-                        setShowDate(false);
-                        if (event.type !== 'dismissed' && selected) setDateObj(selected);
-                    }}
-                />
-            )}
+            {/* ── Date picker (scroll-wheel modal) ──────────────────────────── */}
+            <DatePicker
+                modal
+                open={showDate}
+                date={dateObj || new Date()}
+                mode="date"
+                minimumDate={new Date()}
+                locale="en-US"
+                theme="light"
+                onConfirm={(selected) => { setShowDate(false); setDateObj(selected); }}
+                onCancel={() => setShowDate(false)}
+            />
         </View>
     );
 };
@@ -981,6 +984,7 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
     },
+    carImagePh: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     carImageOverlay: {
         position: 'absolute',
         bottom: 0, left: 0, right: 0,
@@ -1175,6 +1179,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
         backgroundColor: '#EEEEEE',
     },
+    sheetCarPh: { alignItems: 'center', justifyContent: 'center' },
     sheetRouteCard: {
         backgroundColor: '#F9F9F9',
         borderRadius: 12,

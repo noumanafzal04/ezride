@@ -61,14 +61,50 @@ export const useConversationForServiceBooking = (serviceBookingId, options = {})
 
 export const useSendMessage = (conversationId, options = {}) => {
     const qc = useQueryClient();
+    const key = ['messages', conversationId];
     return useMutation({
         mutationFn: (body) => chatService.send(conversationId, body).then(r => r.data?.data),
-        onSuccess: (...a) => {
-            qc.invalidateQueries({ queryKey: ['messages', conversationId] });
-            qc.invalidateQueries({ queryKey: ['conversations'] });
-            options.onSuccess?.(...a);
+
+        // Optimistic: drop the bubble into the thread instantly with a "sending"
+        // clock, so it feels immediate even on a slow network.
+        onMutate: async (body) => {
+            await qc.cancelQueries({ queryKey: key });
+            const previous = qc.getQueryData(key);
+            const tempId = `tmp-${Date.now()}`;
+            const optimistic = {
+                id: tempId, body, is_mine: true,
+                created_at: new Date().toISOString(), _status: 'sending',
+            };
+            qc.setQueryData(key, (old) => {
+                if (!old) return { pages: [{ messages: [optimistic], meta: {} }], pageParams: [1] };
+                const pages = [...old.pages];
+                pages[0] = { ...pages[0], messages: [optimistic, ...(pages[0].messages || [])] };
+                return { ...old, pages };
+            });
+            return { previous, tempId };
         },
-        onError: options.onError,
+
+        // Swap the temp bubble for the saved message → its tick turns "sent".
+        onSuccess: (real, body, ctx) => {
+            qc.setQueryData(key, (old) => {
+                if (!old) return old;
+                const pages = old.pages.map(pg => ({
+                    ...pg,
+                    messages: (pg.messages || []).map(m =>
+                        m.id === ctx?.tempId ? { ...real, is_mine: true } : m),
+                }));
+                return { ...old, pages };
+            });
+            qc.invalidateQueries({ queryKey: ['conversations'] });
+            qc.invalidateQueries({ queryKey: ['chat-unread'] });
+            options.onSuccess?.(real, body, ctx);
+        },
+
+        // Roll back the optimistic bubble; the screen restores the draft + toasts.
+        onError: (err, body, ctx) => {
+            if (ctx?.previous !== undefined) qc.setQueryData(key, ctx.previous);
+            options.onError?.(err, body, ctx);
+        },
     });
 };
 

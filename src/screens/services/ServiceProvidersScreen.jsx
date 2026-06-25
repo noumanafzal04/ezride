@@ -5,12 +5,14 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
+import { useBottomInset } from '../../hooks/useBottomInset';
 import { useServiceProviders } from '../../hooks/useServices';
 import { useCities } from '../../hooks/useLookup';
 import SelectSheet from '../../components/SelectSheet';
 import { RowListSkeleton } from '../../components/Skeletons';
 
 const ServiceProvidersScreen = ({ navigation, route }) => {
+    const pb = useBottomInset();
     const category = route?.params?.category || null;
     const [city, setCity] = useState(null);
 
@@ -84,7 +86,7 @@ const ServiceProvidersScreen = ({ navigation, route }) => {
                 keyExtractor={item => String(item.id)}
                 renderItem={renderItem}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={items.length ? { paddingBottom: 16 } : styles.emptyWrap}
+                contentContainerStyle={items.length ? { paddingBottom: pb } : styles.emptyWrap}
                 refreshing={query.isRefetching}
                 onRefresh={query.refetch}
                 onEndReachedThreshold={0.5}

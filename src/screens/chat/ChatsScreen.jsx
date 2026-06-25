@@ -9,6 +9,14 @@ import Skeleton from '../../components/Skeleton';
 import { useConversations } from '../../hooks/useChat';
 import { useRealtimeConnected } from '../../hooks/useRealtime';
 
+// Colored module tag so you can tell which module a chat belongs to.
+const MODULE_BADGE = {
+    ride:    { label: 'Ride',    color: '#1D6AFF', bg: '#EEF4FF' },
+    service: { label: 'Service', color: '#16A34A', bg: '#E8F8EE' },
+    rental:  { label: 'Rental',  color: '#E11D48', bg: '#FFF0F2' },
+    listing: { label: 'Buy/Sell', color: '#EA580C', bg: '#FFF7ED' },
+};
+
 const timeAgo = (iso) => {
     if (!iso) return '';
     const diff = Date.now() - new Date(iso).getTime();
@@ -42,6 +50,9 @@ const ChatsScreen = ({ navigation }) => {
             <View style={styles.content}>
                 <View style={styles.topRow}>
                     <Text style={styles.name} numberOfLines={1}>{item.other_party?.name || 'User'}</Text>
+                    {(() => { const b = MODULE_BADGE[item.type]; return b ? (
+                        <View style={[styles.modBadge, { backgroundColor: b.bg }]}><Text style={[styles.modBadgeText, { color: b.color }]}>{b.label}</Text></View>
+                    ) : null; })()}
                     <Text style={styles.time}>{timeAgo(item.last_message_at || item.created_at)}</Text>
                 </View>
                 {!!item.route && <Text style={styles.route} numberOfLines={1}>{item.route}</Text>}
@@ -119,8 +130,10 @@ const styles = StyleSheet.create({
     avatarInitial: { fontSize: 18, fontFamily: Fonts.bold, color: '#07163B' },
     content: { flex: 1, gap: 2 },
     topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-    name: { flex: 1, fontSize: 14.5, fontFamily: Fonts.semiBold, color: '#202223' },
-    time: { fontSize: 11, fontFamily: Fonts.regular, color: '#9AA0A6' },
+    name: { flexShrink: 1, fontSize: 14.5, fontFamily: Fonts.semiBold, color: '#202223' },
+    modBadge: { borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+    modBadgeText: { fontSize: 9.5, fontFamily: Fonts.bold, textTransform: 'uppercase', letterSpacing: 0.3 },
+    time: { marginLeft: 'auto', fontSize: 11, fontFamily: Fonts.regular, color: '#9AA0A6' },
     route: { fontSize: 12, fontFamily: Fonts.regular, color: '#9AA0A6' },
     bottomRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     lastMsg: { flex: 1, fontSize: 12.5, fontFamily: Fonts.regular, color: '#5D5F62' },

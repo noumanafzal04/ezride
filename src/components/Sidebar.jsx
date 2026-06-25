@@ -1,7 +1,7 @@
 import React from 'react';
 import {
     View, Text, StyleSheet, TouchableOpacity,
-    Modal, Animated, Dimensions,
+    Modal, Dimensions, ScrollView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../constants/fonts';
@@ -57,117 +57,119 @@ const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
                 {/* Sidebar Panel */}
                 <View style={styles.sidebar}>
 
-                    {/* User Info */}
-                    <View style={styles.userSection}>
-                        <View style={styles.userAvatar}>
-                            <Text style={styles.userInitial}>{initial}</Text>
+                    <ScrollView
+                        style={styles.scroll}
+                        contentContainerStyle={styles.scrollContent}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        {/* User Info */}
+                        <View style={styles.userSection}>
+                            <View style={styles.userAvatar}>
+                                <Text style={styles.userInitial}>{initial}</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.userName} numberOfLines={1}>{fullName}</Text>
+                                <TouchableOpacity
+                                    style={styles.viewProfileRow}
+                                    onPress={() => {
+                                        onClose();
+                                        setTimeout(() => navigation.navigate('Profile'), 200);
+                                    }}
+                                >
+                                    <Text style={styles.viewProfileText}>View Profile</Text>
+                                    <Icon name="chevron-right" size={14} color="#5D5F62"/>
+                                </TouchableOpacity>
+                            </View>
                         </View>
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.userName} numberOfLines={1}>{fullName}</Text>
-                            {!!user?.phone_number && (
-                                <Text style={styles.userPhone}>{user.phone_number}</Text>
-                            )}
+
+                        {/* Role Switcher — only for onboarded drivers (they can also ride) */}
+                        {isActualDriver && (
+                            <View style={styles.roleSwitcher}>
+                                <TouchableOpacity
+                                    style={[styles.roleBtn, !isDriver && styles.roleBtnInactive]}
+                                    onPress={() => switchRole('driver')}
+                                >
+                                    <Text style={[styles.roleText, !isDriver && styles.roleTextInactive]}>Driver</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                    style={[styles.roleBtn, isDriver && styles.roleBtnInactive]}
+                                    onPress={() => switchRole('rider')}
+                                >
+                                    <Text style={[styles.roleText, isDriver && styles.roleTextInactive]}>User</Text>
+                                </TouchableOpacity>
+                            </View>
+                        )}
+
+                        {/* Nav Items */}
+                        <View style={styles.navSection}>
+                            {NAV_ITEMS.map(item => {
+                                const isActive = activeRoute === item.key;
+                                return (
+                                    <TouchableOpacity
+                                        key={item.key}
+                                        style={[styles.navItem, isActive && styles.navItemActive]}
+                                        onPress={() => handleNav(item.key)}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Icon
+                                            name={item.icon}
+                                            size={22}
+                                            color={isActive ? '#07163B' : '#5D5F62'}
+                                        />
+                                        <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+                                            {item.label}
+                                        </Text>
+                                        {item.badge ? (
+                                            <View style={styles.badge}>
+                                                <Text style={styles.badgeText}>{item.badge}</Text>
+                                            </View>
+                                        ) : null}
+                                    </TouchableOpacity>
+                                );
+                            })}
+
+                            {/* Service provider — register (or view profile if already one) */}
                             <TouchableOpacity
-                                style={styles.viewProfileRow}
+                                style={styles.navItem}
+                                onPress={() => handleNav('ServiceProviderRegister')}
+                                activeOpacity={0.7}
+                            >
+                                <Icon name="tools" size={22} color="#5D5F62" />
+                                <Text style={styles.navLabel}>
+                                    {spProfile ? 'My Service Profile' : 'Become a Provider'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Bottom Section */}
+                        <View style={styles.bottomSection}>
+                            <TouchableOpacity style={styles.bottomItem} onPress={() => { onClose(); setTimeout(() => navigation.navigate('Settings'), 200); }}>
+                                <Icon name="cog-outline" size={20} color="#5D5F62" />
+                                <Text style={styles.bottomItemText}>Settings</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity style={styles.bottomItem} onPress={() => { onClose(); setTimeout(() => navigation.navigate('HelpSupport'), 200); }}>
+                                <Icon name="help-circle-outline" size={20} color="#5D5F62" />
+                                <Text style={styles.bottomItemText}>Help & Support</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={styles.bottomItem}
                                 onPress={() => {
                                     onClose();
-                                    setTimeout(() => navigation.navigate('Profile'), 200);
+                                    logout();
+                                    navigation.replace('Login');
                                 }}
                             >
-                                <Text style={styles.viewProfileText}>View Profile</Text>
-                                <Icon name="chevron-right" size={14} color="#5D5F62"/>
+                                <Icon name="power" size={20} color="#D83F54" />
+                                <Text style={[styles.bottomItemText, { color: '#D83F54' }]}>Log Out</Text>
                             </TouchableOpacity>
                         </View>
-                    </View>
 
-                    {/* Role Switcher — only for onboarded drivers (they can also ride) */}
-                    {isActualDriver && (
-                        <View style={styles.roleSwitcher}>
-                            <TouchableOpacity
-                                style={[styles.roleBtn, !isDriver && styles.roleBtnInactive]}
-                                onPress={() => switchRole('driver')}
-                            >
-                                <Text style={[styles.roleText, !isDriver && styles.roleTextInactive]}>Driver</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                                style={[styles.roleBtn, isDriver && styles.roleBtnInactive]}
-                                onPress={() => switchRole('rider')}
-                            >
-                                <Text style={[styles.roleText, isDriver && styles.roleTextInactive]}>User</Text>
-                            </TouchableOpacity>
+                        {/* Footer */}
+                        <View style={styles.footer}>
+                            <Text style={styles.footerVersion}>v2.4.0</Text>
                         </View>
-                    )}
-
-                    {/* Nav Items */}
-                    <View style={styles.navSection}>
-                        {NAV_ITEMS.map(item => {
-                            const isActive = activeRoute === item.key;
-                            return (
-                                <TouchableOpacity
-                                    key={item.key}
-                                    style={[styles.navItem, isActive && styles.navItemActive]}
-                                    onPress={() => handleNav(item.key)}
-                                    activeOpacity={0.7}
-                                >
-                                    <Icon
-                                        name={item.icon}
-                                        size={22}
-                                        color={isActive ? '#07163B' : '#5D5F62'}
-                                    />
-                                    <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
-                                        {item.label}
-                                    </Text>
-                                    {item.badge ? (
-                                        <View style={styles.badge}>
-                                            <Text style={styles.badgeText}>{item.badge}</Text>
-                                        </View>
-                                    ) : null}
-                                </TouchableOpacity>
-                            );
-                        })}
-
-                        {/* Service provider — register (or view profile if already one) */}
-                        <TouchableOpacity
-                            style={styles.navItem}
-                            onPress={() => handleNav('ServiceProviderRegister')}
-                            activeOpacity={0.7}
-                        >
-                            <Icon name="tools" size={22} color="#5D5F62" />
-                            <Text style={styles.navLabel}>
-                                {spProfile ? 'My Service Profile' : 'Become a Provider'}
-                            </Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Bottom Section */}
-                    <View style={styles.bottomSection}>
-                        <TouchableOpacity style={styles.bottomItem} onPress={() => { onClose(); setTimeout(() => navigation.navigate('Settings'), 200); }}>
-                            <Icon name="cog-outline" size={20} color="#5D5F62" />
-                            <Text style={styles.bottomItemText}>Settings</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity style={styles.bottomItem} onPress={() => { onClose(); setTimeout(() => navigation.navigate('HelpSupport'), 200); }}>
-                            <Icon name="help-circle-outline" size={20} color="#5D5F62" />
-                            <Text style={styles.bottomItemText}>Help & Support</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                            style={styles.bottomItem}
-                            onPress={() => {
-                                onClose();
-                                logout();
-                                navigation.replace('Login');
-                            }}
-                        >
-                            <Icon name="power" size={20} color="#D83F54" />
-                            <Text style={[styles.bottomItemText, { color: '#D83F54' }]}>Log Out</Text>
-                        </TouchableOpacity>
-                    </View>
-
-                    {/* Footer */}
-                    <View style={styles.footer}>
-                        <Text style={styles.footerVersion}>v2.4.0</Text>
-
-                    </View>
+                    </ScrollView>
 
                 </View>
             </View>
@@ -191,17 +193,19 @@ const styles = StyleSheet.create({
         left: 0,
         top: 0,
         bottom: 0,
-        paddingTop: 60,
+        paddingTop: 40,
         paddingHorizontal: 24,
-        paddingBottom: 32,
+        paddingBottom: 12,
     },
+    scroll: { flex: 1 },
+    scrollContent: { paddingBottom: 24 },
 
     // User
     userSection: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 14,
-        marginBottom: 24,
+        marginBottom: 20,
     },
     userAvatar: {
         width: 52, height: 52, borderRadius: 26,
@@ -268,7 +272,6 @@ const styles = StyleSheet.create({
 
     // Nav
     navSection: {
-        flex: 1,
         gap: 4,
     },
     navItem: {

@@ -11,6 +11,9 @@ import Sidebar from '../../components/Sidebar';
 import AppHeader from '../../components/AppHeader';
 import BottomSheet from '../../components/BottomSheet';
 import ReviewSheet from '../../components/ReviewSheet';
+import { RideCardSkeleton } from '../../components/Skeletons';
+import Avatar from '../../components/Avatar';
+import { formatMoney } from '../../utils/money';
 import useRidePosts, { useCancelRidePost, useRideLifecycle } from '../../hooks/useRidePosts';
 import { useDriverBookings, useBookingActions } from '../../hooks/useDriverBookings';
 import { useRateBooking } from '../../hooks/useReview';
@@ -25,7 +28,7 @@ const fmtDeparture = (iso) => {
     }).replace(',', ' ·');
 };
 
-const fmtPrice = (p) => `Rs ${Math.round(Number(p)).toLocaleString()}`;
+const fmtPrice = (p) => formatMoney(p, { round: true });
 
 // Tab label → backend booking statuses
 const TABS = ['Pending', 'Accepted', 'Declined'];
@@ -53,6 +56,7 @@ const mapBooking = (b) => ({
     id: b.id,
     name: `${b.passenger?.first_name || ''} ${b.passenger?.last_name || ''}`.trim() || 'Rider',
     rating: null,
+    photo: b.passenger?.profile_image || null,
     seats: b.seats_booked,
     price: `Rs. ${Number(b.total_amount).toLocaleString()}`,
     note: b.note || '',
@@ -64,7 +68,7 @@ const mapBooking = (b) => ({
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-const RideRequestsScreen = ({ navigation }) => {
+const RideRequestsScreen = ({ navigation, embedded = false }) => {
     const [activeTab, setActiveTab] = useState('Pending');
     const [sidebarOpen, setSidebarOpen] = useState(false);
     const [confirmModal, setConfirmModal] = useState(null); // { action: 'accept'|'decline', item }
@@ -208,9 +212,7 @@ const RideRequestsScreen = ({ navigation }) => {
             <View style={styles.card}>
                 {/* Rider row */}
                 <View style={styles.riderRow}>
-                    <View style={styles.avatar}>
-                        <Icon name="account" size={22} color="#CCCCCC" />
-                    </View>
+                    <Avatar uri={item.photo} name={item.name} size={42} bg="#EEEEEE" color="#9AA0A6" style={{ marginRight: 10 }} />
                     <View style={styles.riderInfo}>
                         <Text style={styles.riderName}>{item.name}</Text>
                         <View style={styles.ratingRow}>
@@ -318,10 +320,12 @@ const RideRequestsScreen = ({ navigation }) => {
 
     return (
         <View style={styles.root}>
-            <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
-
-            {/* Header */}
-            <AppHeader title="Booking Requests" onMenu={() => setSidebarOpen(true)} />
+            {!embedded && (
+                <>
+                    <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+                    <AppHeader title="Booking Requests" onMenu={() => setSidebarOpen(true)} />
+                </>
+            )}
 
             {/* Tabs */}
             <View style={styles.tabsRow}>
@@ -362,7 +366,7 @@ const RideRequestsScreen = ({ navigation }) => {
                 onRefresh={bookingsQuery.refetch}
                 ListEmptyComponent={
                     bookingsQuery.isLoading
-                        ? <ActivityIndicator color="#FFD400" style={{ marginTop: 40 }} />
+                        ? <RideCardSkeleton count={3} />
                         : renderEmpty()
                 }
             />

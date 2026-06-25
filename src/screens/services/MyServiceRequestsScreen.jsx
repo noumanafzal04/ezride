@@ -6,6 +6,7 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
+import { useBottomInset } from '../../hooks/useBottomInset';
 import ReviewSheet from '../../components/ReviewSheet';
 import { useMyServiceBookings, useCancelServiceBooking, useRateServiceBooking } from '../../hooks/useServices';
 import { sbMeta, SB_CANCELLABLE } from '../../constants/serviceBooking';
@@ -17,6 +18,7 @@ const fmtDate = (iso) => {
 };
 
 const MyServiceRequestsScreen = ({ navigation, embedded = false }) => {
+    const pb = useBottomInset();
     const query = useMyServiceBookings();
     const items = (query.data?.pages || []).flatMap(p => p.bookings || []);
     const [reviewing, setReviewing] = useState(null);
@@ -111,7 +113,7 @@ const MyServiceRequestsScreen = ({ navigation, embedded = false }) => {
                 data={items}
                 keyExtractor={item => String(item.id)}
                 renderItem={renderItem}
-                contentContainerStyle={items.length ? { padding: 16, gap: 12 } : styles.emptyWrap}
+                contentContainerStyle={items.length ? { padding: 16, gap: 12, paddingBottom: embedded ? 16 : pb } : styles.emptyWrap}
                 showsVerticalScrollIndicator={false}
                 refreshing={query.isRefetching}
                 onRefresh={query.refetch}

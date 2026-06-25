@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View, Text, StyleSheet, FlatList, TouchableOpacity, StatusBar,
     Image, ActivityIndicator, TextInput, Alert, Linking, ScrollView,
@@ -8,15 +8,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Fonts from '../../constants/fonts';
 import { fileUrl } from '../../utils/media';
 import TopTabs from '../../components/TopTabs';
-import { CarGridSkeleton, RowListSkeleton } from '../../components/Skeletons';
+import { RentalGridSkeleton, RowListSkeleton } from '../../components/Skeletons';
+import RentalFilterSheet from '../../components/RentalFilterSheet';
+import ReviewSheet from '../../components/ReviewSheet';
+import { formatMoney } from '../../utils/money';
 import { useCurrentLocation } from '../../hooks/useLocation';
-import { useRentals, useMyRentalBookings, useCancelRentalBooking, useOwnerRentalBookings, useRentalBookingAction } from '../../hooks/useRentals';
+import { useRentals, useRentalModels, useMyRentalBookings, useCancelRentalBooking, useOwnerRentalBookings, useRentalBookingAction, useRateRentalBooking } from '../../hooks/useRentals';
 import Toast from 'react-native-toast-message';
 import chatService from '../../services/chatService';
 
 const CHATTABLE = ['confirmed', 'active', 'completed'];
 
-const money = (n) => (n == null ? '—' : `Rs. ${Number(n).toLocaleString()}`);
+const money = (n) => formatMoney(n);
 const CATS = [{ k: '', l: 'All' }, { k: 'economy', l: 'Economy' }, { k: 'sedan', l: 'Sedan' }, { k: 'suv', l: 'SUV' }, { k: 'luxury', l: 'Luxury' }, { k: 'van', l: 'Van' }];
 const Cap = (s) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
 const BOOK_STATUS = {
@@ -32,22 +35,38 @@ const RentalsScreen = ({ navigation }) => {
     const insets = useSafeAreaInsets();
     const [tab, setTab] = useState('browse');
     const [q, setQ] = useState('');
-    const [cat, setCat] = useState('');
+    const [debouncedQ, setDebouncedQ] = useState('');
+    const [adv, setAdv] = useState({}); // advanced filters from the sheet (category, transmission, price_min/max, rating_min, make, model, sort)
+    const [filterOpen, setFilterOpen] = useState(false);
     const { city } = useCurrentLocation();
 
-    const filters = { ...(q.trim() ? { q: q.trim() } : {}), ...(cat ? { category: cat } : {}) };
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedQ(q.trim()), 350);
+        return () => clearTimeout(t);
+    }, [q]);
+
+    const cleanAdv = Object.fromEntries(Object.entries(adv).filter(([, v]) => v !== '' && v != null));
+    const filters = { ...(debouncedQ ? { q: debouncedQ } : {}), ...cleanAdv };
+    const advCount = Object.keys(cleanAdv).length;
     const browse = useRentals(filters);
     const rentals = (browse.data?.pages || []).flatMap(p => p.rentals || []);
+    const modelsQ = useRentalModels();
 
     const bookingsQ = useMyRentalBookings();
     const bookings = (bookingsQ.data?.pages || []).flatMap(p => p.bookings || []);
-    const cancel = useCancelRentalBooking({ onError: (e) => Alert.alert('Failed', e.response?.data?.message || 'Try again.') });
+    const cancel = useCancelRentalBooking({ onError: (e) => Toast.show({ type: 'error', text1: 'Could not cancel', text2: e.response?.data?.message || 'Try again.' }) });
+
+    const [rateFor, setRateFor] = useState(null); // booking being rated
+    const rate = useRateRentalBooking({
+        onSuccess: () => { setRateFor(null); Toast.show({ type: 'success', text1: 'Thanks for your review!' }); },
+        onError: (e) => Toast.show({ type: 'error', text1: 'Could not submit', text2: e.response?.data?.message || 'Try again.' }),
+    });
 
     const ownerQ = useOwnerRentalBookings();
     const ownerBookings = (ownerQ.data?.pages || []).flatMap(p => p.bookings || []);
     const ownerAct = useRentalBookingAction({
         onSuccess: () => Toast.show({ type: 'success', text1: 'Booking updated' }),
-        onError: (e) => Alert.alert('Failed', e.response?.data?.message || 'Try again.'),
+        onError: (e) => Toast.show({ type: 'error', text1: 'Could not update', text2: e.response?.data?.message || 'Try again.' }),
     });
 
     const openChat = async (bookingId) => {
@@ -56,7 +75,7 @@ const RentalsScreen = ({ navigation }) => {
             const conv = res.data?.data;
             if (conv?.id) navigation.navigate('ChatDetail', { conversationId: conv.id, conversation: conv });
         } catch (e) {
-            Alert.alert('Could not open chat', e.response?.data?.message || 'Try again.');
+            Toast.show({ type: 'error', text1: 'Could not open chat', text2: e.response?.data?.message || 'Try again.' });
         }
     };
 
@@ -75,7 +94,13 @@ const RentalsScreen = ({ navigation }) => {
                     <Text style={styles.cardMeta} numberOfLines={1}>
                         {[Cap(item.category), item.seats ? `${item.seats} seats` : null, item.city?.name].filter(Boolean).join(' · ')}
                     </Text>
-                    <Text style={styles.driverTag}>{item.rental_type === 'self_drive' ? 'Self-drive' : item.rental_type === 'both' ? 'Driver / Self' : 'With driver'}</Text>
+                    <View style={styles.cardFootRow}>
+                        <Text style={styles.driverTag}>{item.rental_type === 'self_drive' ? 'Self-drive' : item.rental_type === 'both' ? 'Driver / Self' : 'With driver'}</Text>
+                        <View style={styles.ratingRow}>
+                            <Icon name="star" size={11} color={item.rating != null ? '#FFC107' : '#D7DBDE'} />
+                            <Text style={styles.ratingTxt}>{item.rating != null ? Number(item.rating).toFixed(1) : 'New'}</Text>
+                        </View>
+                    </View>
                 </View>
             </TouchableOpacity>
         );
@@ -107,6 +132,16 @@ const RentalsScreen = ({ navigation }) => {
                         <TouchableOpacity style={[styles.bkBtn, styles.bkCancel]} onPress={() => Alert.alert('Cancel booking?', '', [{ text: 'Keep', style: 'cancel' }, { text: 'Cancel', style: 'destructive', onPress: () => cancel.mutate(item.id) }])}>
                             <Text style={[styles.bkBtnTxt, { color: '#D83F54' }]}>Cancel</Text>
                         </TouchableOpacity>
+                    )}
+                    {item.can_rate && (
+                        <TouchableOpacity style={[styles.bkPrimary, styles.bkPrimaryRow]} onPress={() => setRateFor(item)}>
+                            <Icon name="star" size={15} color="#07163B" /><Text style={styles.bkPrimaryTxt}>Rate owner</Text>
+                        </TouchableOpacity>
+                    )}
+                    {item.is_rated && (
+                        <View style={styles.ratedTag}>
+                            <Icon name="star" size={13} color="#92600B" /><Text style={styles.ratedTagTxt}>Reviewed</Text>
+                        </View>
                     )}
                 </View>
             </View>
@@ -170,13 +205,22 @@ const RentalsScreen = ({ navigation }) => {
                             <TextInput value={q} onChangeText={setQ} placeholder="Search make or model…" placeholderTextColor="#9AA0A6" style={styles.searchInput} autoCapitalize="none" returnKeyType="search" />
                             {!!q && <TouchableOpacity onPress={() => setQ('')}><Icon name="close-circle" size={17} color="#C4C9CF" /></TouchableOpacity>}
                         </View>
+                        <TouchableOpacity style={[styles.filterBtn, advCount > 0 && styles.filterBtnOn]} onPress={() => setFilterOpen(true)} activeOpacity={0.85}>
+                            <Icon name="tune-variant" size={19} color={advCount > 0 ? '#07163B' : '#5D5F62'} />
+                            {advCount > 0 && <View style={styles.filterCount}><Text style={styles.filterCountTxt}>{advCount}</Text></View>}
+                        </TouchableOpacity>
                     </View>
+
+                    {/* Quick category chips (synced with the filter sheet) */}
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips} style={styles.chipsWrap}>
-                        {CATS.map(c => (
-                            <TouchableOpacity key={c.k} style={[styles.chip, cat === c.k && styles.chipOn]} onPress={() => setCat(c.k)}>
-                                <Text style={[styles.chipTxt, cat === c.k && styles.chipTxtOn]}>{c.l}</Text>
-                            </TouchableOpacity>
-                        ))}
+                        {CATS.map(c => {
+                            const on = (adv.category || '') === c.k;
+                            return (
+                                <TouchableOpacity key={c.k} style={[styles.chip, on && styles.chipOn]} onPress={() => setAdv(a => ({ ...a, category: c.k }))}>
+                                    <Text style={[styles.chipTxt, on && styles.chipTxtOn]}>{c.l}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </ScrollView>
 
                     <FlatList
@@ -186,14 +230,28 @@ const RentalsScreen = ({ navigation }) => {
                         columnWrapperStyle={rentals.length ? styles.grid : undefined}
                         contentContainerStyle={styles.listPad}
                         renderItem={renderCard}
-                        ListHeaderComponent={city?.name ? <View style={styles.locPill}><Icon name="map-marker" size={13} color="#07163B" /><Text style={styles.locTxt}>Near {city.name}</Text></View> : null}
+                        ListHeaderComponent={
+                            <View style={styles.listHead}>
+                                {city?.name && !filters.city_id ? (
+                                    <View style={styles.locPill}><Icon name="map-marker" size={13} color="#07163B" /><Text style={styles.locTxt}>Near {city.name}</Text></View>
+                                ) : <View />}
+                                {rentals.length > 0 && <Text style={styles.resultCount}>{browse.data?.pages?.[0]?.meta?.total ?? rentals.length} cars</Text>}
+                            </View>
+                        }
                         showsVerticalScrollIndicator={false}
                         refreshing={browse.isRefetching}
                         onRefresh={browse.refetch}
                         onEndReachedThreshold={0.5}
                         onEndReached={() => { if (browse.hasNextPage && !browse.isFetchingNextPage) browse.fetchNextPage(); }}
-                        ListEmptyComponent={browse.isLoading ? <CarGridSkeleton /> : (
-                            <View style={styles.empty}><Icon name="car-off" size={44} color="#DDDDDD" /><Text style={styles.emptyTitle}>No cars for rent</Text></View>
+                        ListFooterComponent={browse.isFetchingNextPage ? <ActivityIndicator color="#FFD400" style={{ marginVertical: 16 }} /> : null}
+                        ListEmptyComponent={browse.isLoading ? <RentalGridSkeleton /> : (
+                            <View style={styles.empty}>
+                                <Icon name="car-off" size={44} color="#DDDDDD" />
+                                <Text style={styles.emptyTitle}>No cars match</Text>
+                                {(advCount > 0 || debouncedQ) && (
+                                    <TouchableOpacity onPress={() => { setAdv({}); setQ(''); }}><Text style={styles.clearLink}>Clear filters</Text></TouchableOpacity>
+                                )}
+                            </View>
                         )}
                     />
                     <TouchableOpacity style={[styles.fab, { bottom: insets.bottom + 18 }]} onPress={() => navigation.navigate('ListRental')} activeOpacity={0.9}>
@@ -231,6 +289,23 @@ const RentalsScreen = ({ navigation }) => {
                     )}
                 />
             )}
+
+            <RentalFilterSheet
+                visible={filterOpen}
+                onClose={() => setFilterOpen(false)}
+                initial={adv}
+                models={modelsQ.data || []}
+                onApply={setAdv}
+            />
+
+            <ReviewSheet
+                visible={!!rateFor}
+                onClose={() => setRateFor(null)}
+                submitting={rate.isPending}
+                title="Rate this rental"
+                subtitle={rateFor ? `How was your experience with ${rateFor.owner?.name || 'the owner'}?` : ''}
+                onSubmit={(rating, review) => rateFor && rate.mutate({ id: rateFor.id, payload: { rating, review } })}
+            />
         </View>
     );
 };
@@ -241,9 +316,20 @@ const styles = StyleSheet.create({
     hSide: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
     headerTitle: { fontSize: 17, fontFamily: Fonts.semiBold, color: '#07163B' },
 
-    searchRow: { paddingHorizontal: 16, paddingTop: 12 },
-    searchBox: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAEDEE', borderRadius: 12, paddingHorizontal: 13, paddingVertical: 10 },
+    searchRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingTop: 12 },
+    searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAEDEE', borderRadius: 12, paddingHorizontal: 13, paddingVertical: 10 },
     searchInput: { flex: 1, fontSize: 14, fontFamily: Fonts.regular, color: '#202223', padding: 0 },
+    filterBtn: { width: 44, height: 44, borderRadius: 12, borderWidth: 1, borderColor: '#EAEDEE', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+    filterBtnOn: { borderColor: '#FFD400', backgroundColor: '#FFF9DB' },
+    filterCount: { position: 'absolute', top: -5, right: -5, minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 4, backgroundColor: '#07163B', alignItems: 'center', justifyContent: 'center' },
+    filterCountTxt: { fontSize: 10, fontFamily: Fonts.bold, color: '#FFFFFF' },
+
+    listHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+    resultCount: { fontSize: 12, fontFamily: Fonts.medium, color: '#9AA0A6' },
+    cardFootRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+    ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+    ratingTxt: { fontSize: 10.5, fontFamily: Fonts.semiBold, color: '#5D5F62' },
+    clearLink: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#1D6AFF', marginTop: 6 },
     chipsWrap: { maxHeight: 56 },
     chips: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
     chip: { borderWidth: 1, borderColor: '#D7DBDE', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, backgroundColor: '#FFFFFF', height: 34 },
@@ -282,7 +368,10 @@ const styles = StyleSheet.create({
     bkBtnTxt: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#07163B' },
     bkCancel: { borderColor: '#D83F54' },
     bkPrimary: { backgroundColor: '#FFD400', borderRadius: 10, paddingHorizontal: 16, paddingVertical: 9, alignItems: 'center', justifyContent: 'center' },
+    bkPrimaryRow: { flexDirection: 'row', gap: 6 },
     bkPrimaryTxt: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#07163B' },
+    ratedTag: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFF4C2', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+    ratedTagTxt: { fontSize: 12.5, fontFamily: Fonts.semiBold, color: '#92600B' },
 
     empty: { alignItems: 'center', paddingTop: 60, gap: 8 },
     emptyTitle: { fontSize: 15, fontFamily: Fonts.semiBold, color: '#AAAAAA' },

@@ -7,6 +7,7 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
 import Sidebar from '../../components/Sidebar';
+import { RideCardSkeleton } from '../../components/Skeletons';
 import { useMyBookings, useCancelBooking } from '../../hooks/useMyBookings';
 
 const TABS = ['Pending', 'Accepted', 'Cancelled'];
@@ -31,7 +32,7 @@ const fmtDate = (iso) => {
         : d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true });
 };
 
-const MyBookingsScreen = ({ navigation }) => {
+const MyBookingsScreen = ({ navigation, embedded = false }) => {
     const [activeTab, setActiveTab] = useState('Pending');
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -148,17 +149,20 @@ const MyBookingsScreen = ({ navigation }) => {
 
     return (
         <View style={styles.root}>
-            <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
-
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => setSidebarOpen(true)}>
-                    <Icon name="menu" size={24} color="#07163B" />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>My Bookings</Text>
-                <TouchableOpacity onPress={goSearch}>
-                    <Icon name="magnify" size={22} color="#07163B" />
-                </TouchableOpacity>
-            </View>
+            {!embedded && (
+                <>
+                    <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
+                    <View style={styles.header}>
+                        <TouchableOpacity onPress={() => setSidebarOpen(true)}>
+                            <Icon name="menu" size={24} color="#07163B" />
+                        </TouchableOpacity>
+                        <Text style={styles.headerTitle}>My Bookings</Text>
+                        <TouchableOpacity onPress={goSearch}>
+                            <Icon name="magnify" size={22} color="#07163B" />
+                        </TouchableOpacity>
+                    </View>
+                </>
+            )}
 
             <View style={styles.tabsRow}>
                 {TABS.map(tab => (
@@ -189,7 +193,7 @@ const MyBookingsScreen = ({ navigation }) => {
                 onRefresh={bookingsQuery.refetch}
                 ListEmptyComponent={
                     bookingsQuery.isLoading
-                        ? <ActivityIndicator color="#FFD400" style={{ marginTop: 50 }} />
+                        ? <RideCardSkeleton count={3} />
                         : renderEmpty()
                 }
             />

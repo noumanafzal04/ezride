@@ -7,6 +7,8 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
 import { useInspection, useCancelInspection } from '../../hooks/useInspections';
+import { PageSkeleton } from '../../components/Skeletons';
+import { useBottomInset } from '../../hooks/useBottomInset';
 import { metaFor, INSPECTION_FLOW, conditionMeta } from '../../constants/inspection';
 
 const CANCELLABLE = ['pending', 'reviewing', 'scheduled'];
@@ -54,6 +56,7 @@ const Stepper = ({ status }) => {
 };
 
 const InspectionDetailScreen = ({ route, navigation }) => {
+    const pb = useBottomInset();
     const { id } = route.params || {};
     const { data: item, isLoading, isError, refetch, isRefetching } = useInspection(id);
 
@@ -87,7 +90,7 @@ const InspectionDetailScreen = ({ route, navigation }) => {
             </View>
 
             {isLoading ? (
-                <View style={styles.center}><ActivityIndicator color="#FFD400" /></View>
+                <PageSkeleton />
             ) : isError || !item ? (
                 <View style={styles.center}>
                     <Icon name="alert-circle-outline" size={40} color="#DDDDDD" />
@@ -96,7 +99,7 @@ const InspectionDetailScreen = ({ route, navigation }) => {
             ) : (
                 <ScrollView
                     showsVerticalScrollIndicator={false}
-                    contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+                    contentContainerStyle={{ padding: 16, paddingBottom: pb }}
                 >
                     {/* Status header */}
                     <View style={styles.statusCard}>
