@@ -18,18 +18,10 @@ import RideDetailScreen from '../screens/driver/RideDetailScreen';
 import RideHistoryScreen from '../screens/user/RideHistoryScreen';
 import ReviewScreen from '../screens/user/ReviewScreen';
 import ChatDetailScreen from "../screens/chat/ChatDetailScreen";
-import MarketplaceScreen from "../screens/buysell/MarketplaceScreen";
-import FeaturedPostsScreen from "../screens/buysell/FeaturedPostsScreen";
-import CarDetailScreen from "../screens/buysell/CarDetailScreen";
-import SellerProfileScreen from "../screens/buysell/SellerProfileScreen";
-import SellCarScreen from "../screens/buysell/SellCarScreen";
 import TopUpScreen from "../screens/user/TopUpScreen";
 import HistoryScreen from "../screens/user/HistoryScreen";
 import SettingsScreen from "../screens/settings/SettingsScreen";
 import MembershipScreen from "../screens/settings/MembershipScreen";
-import RentalsScreen from "../screens/rental/RentalsScreen";
-import RentalDetailScreen from "../screens/rental/RentalDetailScreen";
-import ListRentalScreen from "../screens/rental/ListRentalScreen";
 import HelpSupportScreen from "../screens/settings/HelpSupportScreen";
 import DriverOnboardingScreen from '../screens/driver/DriverOnboardingScreen';
 import InspectionRequestScreen from '../screens/inspection/InspectionRequestScreen';
@@ -71,19 +63,10 @@ const AppNavigator = () => {
 
                 <Stack.Screen name="ChatDetail" component={ChatDetailScreen}/>
 
-                <Stack.Screen name="Marketplace" component={MarketplaceScreen}/>
-                <Stack.Screen name="FeaturedPosts" component={FeaturedPostsScreen}/>
-                <Stack.Screen name="CarDetail" component={CarDetailScreen}/>
-                <Stack.Screen name="SellerProfile" component={SellerProfileScreen}/>
-                <Stack.Screen name="SellCar" component={SellCarScreen}/>
-
                 <Stack.Screen name="TopUp" component={TopUpScreen}/>
                 <Stack.Screen name="History" component={HistoryScreen}/>
                 <Stack.Screen name="Settings" component={SettingsScreen}/>
                 <Stack.Screen name="Membership" component={MembershipScreen}/>
-                <Stack.Screen name="Rentals" component={RentalsScreen}/>
-                <Stack.Screen name="RentalDetail" component={RentalDetailScreen}/>
-                <Stack.Screen name="ListRental" component={ListRentalScreen}/>
                 <Stack.Screen name="HelpSupport" component={HelpSupportScreen}/>
                 <Stack.Screen name="DriverOnboarding" component={DriverOnboardingScreen}/>
 

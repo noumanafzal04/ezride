@@ -7,13 +7,16 @@ import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import Fonts from '../../constants/fonts';
 import Sidebar from '../../components/Sidebar';
+import ReviewSheet from '../../components/ReviewSheet';
 import { RideCardSkeleton } from '../../components/Skeletons';
-import { useMyBookings, useCancelBooking } from '../../hooks/useMyBookings';
+import { useMyBookings, useCancelBooking, useCompleteBooking } from '../../hooks/useMyBookings';
+import { useRateBooking } from '../../hooks/useReview';
 
-const TABS = ['Pending', 'Accepted', 'Cancelled'];
+const TABS = ['Pending', 'Accepted', 'Completed', 'Cancelled'];
 const TAB_STATUSES = {
     Pending:   ['pending'],
     Accepted:  ['accepted'],
+    Completed: ['completed'],
     Cancelled: ['rejected', 'cancelled'],
 };
 
@@ -35,6 +38,7 @@ const fmtDate = (iso) => {
 const MyBookingsScreen = ({ navigation, embedded = false }) => {
     const [activeTab, setActiveTab] = useState('Pending');
     const [sidebarOpen, setSidebarOpen] = useState(false);
+    const [reviewFor, setReviewFor] = useState(null);
 
     const bookingsQuery = useMyBookings();
     const all = bookingsQuery.data || [];
@@ -43,6 +47,27 @@ const MyBookingsScreen = ({ navigation, embedded = false }) => {
         onSuccess: () => Toast.show({ type: 'success', text1: 'Booking Cancelled' }),
         onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
     });
+
+    const rate = useRateBooking({
+        onSuccess: () => { setReviewFor(null); Toast.show({ type: 'success', text1: 'Thanks for your review!' }); },
+        onError: (err) => Toast.show({ type: 'error', text1: 'Could not submit', text2: err.response?.data?.message || 'Try again.' }),
+    });
+
+    const completeRide = useCompleteBooking({
+        onSuccess: (_r, id) => {
+            const b = all.find(x => x.id === id);
+            Toast.show({ type: 'success', text1: 'Ride completed', text2: 'Hope you had a great trip!' });
+            if (b) setReviewFor(b); // straight into review, like the driver flow
+        },
+        onError: (err) => Toast.show({ type: 'error', text1: 'Could not complete', text2: err.response?.data?.message || 'Try again.' }),
+    });
+
+    const confirmComplete = (booking) => {
+        Alert.alert('Complete this ride?', 'Mark the ride as finished and rate your driver.', [
+            { text: 'Not yet', style: 'cancel' },
+            { text: 'Complete', onPress: () => completeRide.mutate(booking.id) },
+        ]);
+    };
 
     const currentList = all.filter(b => TAB_STATUSES[activeTab].includes(b.status));
     const tabCount = (tab) => all.filter(b => TAB_STATUSES[tab].includes(b.status)).length;
@@ -61,10 +86,13 @@ const MyBookingsScreen = ({ navigation, embedded = false }) => {
     const renderCard = ({ item }) => {
         const ride = item.ride || {};
         const driver = ride.driver || {};
-        const badge = STATUS_BADGE[item.status] || STATUS_BADGE.pending;
         const isPending = item.status === 'pending';
         const isAccepted = item.status === 'accepted';
         const isClosed = ['rejected', 'cancelled'].includes(item.status);
+        const inProgress = isAccepted && ride.status === 'in_progress';
+        const badge = inProgress
+            ? { label: 'In progress', color: '#1D6AFF', bg: '#EEF4FF' }
+            : (STATUS_BADGE[item.status] || STATUS_BADGE.pending);
 
         return (
             <View style={styles.card}>
@@ -99,7 +127,9 @@ const MyBookingsScreen = ({ navigation, embedded = false }) => {
                             <Text style={styles.driverName}>
                                 {[driver.first_name, driver.last_name].filter(Boolean).join(' ') || 'Driver'}
                             </Text>
-                            <Text style={styles.driverSub}>Your ride is confirmed</Text>
+                            <Text style={[styles.driverSub, inProgress && { color: '#1D6AFF' }]}>
+                                {inProgress ? '🚗 Ride in progress' : 'Your ride is confirmed'}
+                            </Text>
                         </View>
                         <TouchableOpacity style={styles.msgBtn} onPress={() => goChat(item)}>
                             <Icon name="message-outline" size={16} color="#07163B" />
@@ -112,7 +142,17 @@ const MyBookingsScreen = ({ navigation, embedded = false }) => {
 
                 {/* Actions */}
                 <View style={styles.actions}>
-                    {(isPending || isAccepted) && (
+                    {inProgress && (
+                        <TouchableOpacity
+                            style={styles.completeBtn}
+                            onPress={() => confirmComplete(item)}
+                            disabled={completeRide.isPending}
+                        >
+                            <Icon name="flag-checkered" size={16} color="#07163B" />
+                            <Text style={styles.completeText}>{completeRide.isPending && completeRide.variables === item.id ? 'Completing…' : 'Complete Ride'}</Text>
+                        </TouchableOpacity>
+                    )}
+                    {(item.can_cancel ?? (isPending || isAccepted)) && (
                         <TouchableOpacity
                             style={styles.cancelBtn}
                             onPress={() => confirmCancel(item)}
@@ -121,7 +161,19 @@ const MyBookingsScreen = ({ navigation, embedded = false }) => {
                             <Text style={styles.cancelText}>Cancel</Text>
                         </TouchableOpacity>
                     )}
-                    {isClosed && (
+                    {item.can_review && (
+                        <TouchableOpacity style={styles.searchBtn} onPress={() => setReviewFor(item)}>
+                            <Icon name="star" size={15} color="#111111" />
+                            <Text style={styles.searchText}>Leave a Review</Text>
+                        </TouchableOpacity>
+                    )}
+                    {item.my_review && (
+                        <View style={styles.reviewedTag}>
+                            <Icon name="star" size={13} color="#92600B" />
+                            <Text style={styles.reviewedText}>Reviewed</Text>
+                        </View>
+                    )}
+                    {isClosed && !item.can_review && !item.my_review && (
                         <TouchableOpacity style={styles.searchBtn} onPress={goSearch}>
                             <Icon name="magnify" size={15} color="#111111" />
                             <Text style={styles.searchText}>Search More Rides</Text>
@@ -204,6 +256,15 @@ const MyBookingsScreen = ({ navigation, embedded = false }) => {
                 navigation={navigation}
                 activeRoute="Rides"
             />
+
+            <ReviewSheet
+                visible={!!reviewFor}
+                onClose={() => setReviewFor(null)}
+                submitting={rate.isPending}
+                title="Rate your ride"
+                subtitle={reviewFor ? `${reviewFor.ride?.from_city || ''} → ${reviewFor.ride?.to_city || ''}` : ''}
+                onSubmit={(rating, review) => reviewFor && rate.mutate({ id: reviewFor.id, rating, review })}
+            />
         </View>
     );
 };
@@ -256,7 +317,11 @@ const styles = StyleSheet.create({
     actions: { flexDirection: 'row', gap: 10, marginTop: 4 },
     cancelBtn: { flex: 1, paddingVertical: 11, borderRadius: 10, borderWidth: 1.5, borderColor: '#D83F54', backgroundColor: '#FFF0F2', alignItems: 'center' },
     cancelText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#D83F54' },
+    completeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, borderRadius: 10, backgroundColor: '#FFD400' },
+    completeText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#07163B' },
     searchBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 11, paddingHorizontal: 16, borderRadius: 10, backgroundColor: '#FFD400' },
+    reviewedTag: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFF4C2', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8 },
+    reviewedText: { fontSize: 12.5, fontFamily: 'Poppins-SemiBold', color: '#92600B' },
     searchText: { fontSize: 13, fontFamily: Fonts.semiBold, color: '#111111' },
 
     empty: { alignItems: 'center', paddingTop: 60, gap: 12 },

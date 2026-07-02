@@ -12,8 +12,6 @@ import { useMembership, usePlans, useSubscribe } from '../../hooks/useSubscripti
 const MODULE = {
     ride: { label: 'Rides', icon: 'car' },
     service: { label: 'Services', icon: 'wrench' },
-    buysell: { label: 'Buy / Sell', icon: 'tag' },
-    rental: { label: 'Rental', icon: 'car-key' },
 };
 const fmtDate = (iso) => (iso ? new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '');
 const price = (n) => (Number(n) > 0 ? `Rs. ${Number(n).toLocaleString()}` : 'Free');

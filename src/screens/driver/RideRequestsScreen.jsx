@@ -64,6 +64,7 @@ const mapBooking = (b) => ({
     status: b.status,
     departureAt: b.ride?.departure_at,
     phone: b.passenger?.phone_number,
+    distanceKm: b.pickup_distance_km ?? null,
 });
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -220,6 +221,13 @@ const RideRequestsScreen = ({ navigation, embedded = false }) => {
                             <Text style={styles.ratingText}>
                                 {item.rating ? `${item.rating}` : 'New rider'}
                             </Text>
+                            {item.distanceKm != null && (
+                                <>
+                                    <Text style={styles.ratingText}>·</Text>
+                                    <Icon name="map-marker-distance" size={12} color="#1D6AFF" />
+                                    <Text style={styles.distanceText}>{item.distanceKm} km away</Text>
+                                </>
+                            )}
                         </View>
                     </View>
                     <View style={styles.priceCol}>
@@ -750,6 +758,7 @@ const styles = StyleSheet.create({
     },
     ratingRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     ratingText: { fontSize: 12, fontFamily: Fonts.regular, color: '#5D5F62' },
+    distanceText: { fontSize: 12, fontFamily: Fonts.semiBold, color: '#1D6AFF' },
     priceCol: { alignItems: 'flex-end' },
     cardPrice: { fontSize: 15, fontFamily: Fonts.bold, color: '#202223' },
     cardSeats: { fontSize: 12, fontFamily: Fonts.medium, color: '#109F2A', marginTop: 2 },

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     StatusBar, TextInput, ActivityIndicator,
+    KeyboardAvoidingView, Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
@@ -44,7 +45,8 @@ const TrackInspectionScreen = ({ navigation, route }) => {
                 <View style={styles.headerSpacer} />
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={[styles.body, { paddingBottom: pb }]} keyboardShouldPersistTaps="handled">
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={[styles.body, { paddingBottom: pb }]} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={true}>
                 <Text style={styles.hint}>Enter the tracking code from your confirmation email.</Text>
 
                 <View style={styles.searchRow}>
@@ -143,6 +145,7 @@ const TrackInspectionScreen = ({ navigation, route }) => {
                     </>
                 )}
             </ScrollView>
+            </KeyboardAvoidingView>
         </View>
     );
 };

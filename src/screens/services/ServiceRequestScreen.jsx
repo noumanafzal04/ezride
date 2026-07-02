@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    StatusBar, TextInput, Platform,
+    StatusBar, TextInput, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import DatePicker from 'react-native-date-picker';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Fonts from '../../constants/fonts';
 import { useCreateServiceBooking } from '../../hooks/useServices';
 
@@ -68,12 +67,13 @@ const ServiceRequestScreen = ({ navigation, route }) => {
                 <View style={styles.headerSpacer} />
             </View>
 
-            <KeyboardAwareScrollView
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <ScrollView
+                style={{ flex: 1 }}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ padding: 16, paddingBottom: 120 + insets.bottom }}
+                contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
                 keyboardShouldPersistTaps="handled"
-                enableOnAndroid
-                extraScrollHeight={20}
+                automaticallyAdjustKeyboardInsets={true}
             >
                 <View style={styles.providerCard}>
                     <View style={styles.avatar}><Text style={styles.avatarInitial}>{(provider.business_name?.[0] || '?').toUpperCase()}</Text></View>
@@ -137,7 +137,7 @@ const ServiceRequestScreen = ({ navigation, route }) => {
 
                 <Text style={styles.label}>Notes <Text style={styles.optional}>(optional)</Text></Text>
                 <TextInput style={[styles.input, styles.textArea]} placeholder="Describe the problem / what you need" placeholderTextColor="#9CA3AF" value={notes} onChangeText={setNotes} multiline textAlignVertical="top" />
-            </KeyboardAwareScrollView>
+            </ScrollView>
 
             <View style={[styles.bottomBtn, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity
@@ -149,6 +149,7 @@ const ServiceRequestScreen = ({ navigation, route }) => {
                     <Text style={styles.submitText}>{create.isPending ? 'Sending…' : 'Send Request'}</Text>
                 </TouchableOpacity>
             </View>
+            </KeyboardAvoidingView>
         </View>
     );
 };
@@ -198,7 +199,6 @@ const styles = StyleSheet.create({
     selectPH: { flex: 1, fontSize: 14, fontFamily: Fonts.regular, color: '#9CA3AF' },
 
     bottomBtn: {
-        position: 'absolute', bottom: 0, left: 0, right: 0,
         backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 12,
         borderTopWidth: 1, borderTopColor: '#EAEDEE',
     },

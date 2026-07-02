@@ -36,20 +36,6 @@ const TYPE_META = {
     service_booking_completed: { icon: 'check-decagram-outline', color: '#109F2A', bg: '#E8F8EE' },
     service_booking_cancelled: { icon: 'close-octagon-outline', color: '#D83F54', bg: '#FFF0F2' },
     service_provider_approved: { icon: 'shield-check-outline', color: '#109F2A', bg: '#E8F8EE' },
-    // Marketplace
-    listing_approved:  { icon: 'tag-check-outline',   color: '#109F2A', bg: '#E8F8EE' },
-    listing_rejected:  { icon: 'tag-off-outline',     color: '#D83F54', bg: '#FFF0F2' },
-    listing_priced:    { icon: 'tag-outline',         color: '#1D6AFF', bg: '#EEF4FF' },
-    // Rentals
-    rental_approved:           { icon: 'car-key',                color: '#109F2A', bg: '#E8F8EE' },
-    rental_rejected:           { icon: 'car-off',                color: '#D83F54', bg: '#FFF0F2' },
-    rental_priced:             { icon: 'cash',                   color: '#1D6AFF', bg: '#EEF4FF' },
-    rental_booking_requested:  { icon: 'car-clock',              color: '#1D6AFF', bg: '#EEF4FF' },
-    rental_booking_confirmed:  { icon: 'check-circle-outline',   color: '#109F2A', bg: '#E8F8EE' },
-    rental_booking_rejected:   { icon: 'close-circle-outline',   color: '#D83F54', bg: '#FFF0F2' },
-    rental_booking_started:    { icon: 'car',                    color: '#1D6AFF', bg: '#EEF4FF' },
-    rental_booking_completed:  { icon: 'check-decagram-outline', color: '#109F2A', bg: '#E8F8EE' },
-    rental_booking_cancelled:  { icon: 'close-octagon-outline',  color: '#5D5F62', bg: '#F1F2F4' },
 };
 const DEFAULT_META = { icon: 'bell-outline', color: '#6C63FF', bg: '#F0EEFF' };
 
@@ -100,14 +86,6 @@ const NotificationsScreen = ({ navigation }) => {
         }
         if (t.startsWith('service_booking_')) {
             return navigation.navigate('MyServiceRequests');
-        }
-        // ── Marketplace ──
-        if (t.startsWith('listing_')) {
-            return d.car_listing_id ? navigation.navigate('CarDetail', { id: d.car_listing_id }) : navigation.navigate('Marketplace');
-        }
-        // ── Rentals ──
-        if (t.startsWith('rental_booking_') || t === 'rental_approved' || t === 'rental_rejected' || t === 'rental_priced') {
-            return navigation.navigate('Rentals');
         }
         // ── Rides ──
         if (t === 'booking_requested' || t === 'booking_cancelled') {
@@ -169,9 +147,11 @@ const NotificationsScreen = ({ navigation }) => {
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => navigation.goBack()}>
-                    <Icon name="arrow-left" size={24} color="#07163B" />
-                </TouchableOpacity>
+                {navigation.canGoBack() ? (
+                    <TouchableOpacity onPress={() => navigation.goBack()}>
+                        <Icon name="arrow-left" size={24} color="#07163B" />
+                    </TouchableOpacity>
+                ) : <View style={{ width: 24 }} />}
                 <Text style={styles.headerTitle}>Notifications</Text>
                 {hasUnread ? (
                     <TouchableOpacity onPress={() => markAll.mutate()} disabled={markAll.isPending}>

@@ -8,25 +8,29 @@ import Toast from 'react-native-toast-message';
 import Fonts from '../constants/fonts';
 import { useServiceCategories } from '../hooks/useServices';
 import { useCurrentLocation } from '../hooks/useLocation';
+import { useModules } from '../hooks/useModules';
 import { useBottomInset } from '../hooks/useBottomInset';
 
 // Every module the user can reach from one place. `keywords` widen search hits.
 const MODULES = [
-    { key: 'ride', icon: 'car-multiple', title: 'Find a Ride', desc: 'Book a seat city-to-city', tint: '#EEF4FF', ic: '#1D6AFF', route: 'AvailableRides', keywords: 'ride travel carpool seat trip lift commute' },
-    { key: 'rent', icon: 'car-key', title: 'Rent a Car', desc: 'Self-drive & with driver', tint: '#FFF1F2', ic: '#E11D48', route: 'Rentals', keywords: 'rent rental hire self drive lease' },
-    { key: 'services', icon: 'wrench', title: 'Car Services', desc: 'Mechanic, wash, tyres & more', tint: '#EDFFF4', ic: '#16A34A', route: 'Services', keywords: 'service mechanic wash tyre battery repair detailing fuel' },
-    { key: 'inspect', icon: 'clipboard-check-outline', title: 'Inspection', desc: '120-point certified report', tint: '#F3EEFF', ic: '#7C3AED', route: 'InspectionRequest', keywords: 'inspection check report certified buy verify' },
-    { key: 'buysell', icon: 'tag-outline', title: 'Buy / Sell', desc: 'Browse & list cars for sale', tint: '#FFF7ED', ic: '#EA580C', route: 'Marketplace', keywords: 'buy sell car marketplace listing used new' },
+    { key: 'ride', flag: 'ride', icon: 'car-multiple', title: 'Find a Ride', desc: 'Book a seat city-to-city', tint: '#EEF4FF', ic: '#1D6AFF', route: 'AvailableRides', keywords: 'ride travel carpool seat trip lift commute' },
+    { key: 'services', flag: 'service', icon: 'wrench', title: 'Car Services', desc: 'Mechanic, wash, tyres & more', tint: '#EDFFF4', ic: '#16A34A', route: 'Services', keywords: 'service mechanic wash tyre battery repair detailing fuel' },
+    { key: 'inspect', flag: 'inspection', icon: 'clipboard-check-outline', title: 'Inspection', desc: '120-point certified report', tint: '#F3EEFF', ic: '#7C3AED', route: 'InspectionRequest', keywords: 'inspection check report certified buy verify' },
 ];
 
-const SUGGESTIONS = ['Mechanic', 'Car wash', 'Rent SUV', 'Inspection', 'Find a ride'];
+const SUGGESTIONS = ['Mechanic', 'Car wash', 'Inspection', 'Find a ride'];
 
 const DiscoverScreen = ({ navigation }) => {
     const [q, setQ] = useState('');
     const { data: categories = [] } = useServiceCategories();
     const { city } = useCurrentLocation();
+    const { isEnabled } = useModules();
     const pb = useBottomInset();
     const term = q.trim().toLowerCase();
+
+    // Only surface modules the admin has switched on (+ services chips when service is on).
+    const modules = MODULES.filter(m => isEnabled(m.flag));
+    const showServices = isEnabled('service');
 
     const open = (m) => {
         if (m.soon || !m.route) {
@@ -38,11 +42,11 @@ const DiscoverScreen = ({ navigation }) => {
 
     // Live results combine modules + service categories.
     const moduleHits = useMemo(() =>
-        !term ? [] : MODULES.filter(m => `${m.title} ${m.desc} ${m.keywords}`.toLowerCase().includes(term)),
-        [term]);
+        !term ? [] : modules.filter(m => `${m.title} ${m.desc} ${m.keywords}`.toLowerCase().includes(term)),
+        [term, modules]);
     const categoryHits = useMemo(() =>
-        !term ? [] : categories.filter(c => c.name.toLowerCase().includes(term)).slice(0, 8),
-        [term, categories]);
+        (!term || !showServices) ? [] : categories.filter(c => c.name.toLowerCase().includes(term)).slice(0, 8),
+        [term, categories, showServices]);
     const noResults = term && moduleHits.length === 0 && categoryHits.length === 0;
 
     return (
@@ -145,7 +149,7 @@ const DiscoverScreen = ({ navigation }) => {
 
                         <Text style={styles.sectionTitle}>What do you need?</Text>
                         <View style={styles.grid}>
-                            {MODULES.map(m => (
+                            {modules.map(m => (
                                 <TouchableOpacity key={m.key} style={styles.tile} activeOpacity={0.85} onPress={() => open(m)}>
                                     <View style={[styles.tileIcon, { backgroundColor: m.tint }]}>
                                         <Icon name={m.icon} size={24} color={m.ic} />
@@ -156,7 +160,7 @@ const DiscoverScreen = ({ navigation }) => {
                             ))}
                         </View>
 
-                        {categories.length > 0 && (
+                        {showServices && categories.length > 0 && (
                             <>
                                 <Text style={styles.sectionTitle}>Popular services</Text>
                                 <View style={styles.chipsWrap}>

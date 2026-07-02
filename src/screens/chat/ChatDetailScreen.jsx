@@ -107,7 +107,7 @@ const ChatDetailScreen = ({ navigation, route }) => {
     return (
         <KeyboardAvoidingView
             style={styles.root}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 

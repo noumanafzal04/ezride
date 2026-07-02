@@ -22,6 +22,7 @@ const rideService = {
     // ── Rider: own bookings ─────────────────────────────────────
     getMyBookings: (params = {}) => api.get('/bookings', { params }),
     cancelBooking: (id) => api.post(`/bookings/${id}/cancel`),
+    completeBooking: (id) => api.post(`/bookings/${id}/complete`),
 
     // ── Ride trip lifecycle (driver controls the whole ride) ────
     startRide: (ridePostId) => api.post(`/driver/ride-posts/${ridePostId}/start`),

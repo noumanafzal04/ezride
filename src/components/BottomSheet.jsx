@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
     Modal, View, StyleSheet, Animated, PanResponder, Dimensions, Pressable,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '../constants/colors';
 
 const SCREEN_H = Dimensions.get('window').height;
@@ -14,6 +15,7 @@ const SCREEN_H = Dimensions.get('window').height;
  * Props: visible, onClose, children, sheetStyle
  */
 const BottomSheet = ({ visible, onClose, children, sheetStyle }) => {
+    const insets = useSafeAreaInsets();
     const translateY = useRef(new Animated.Value(SCREEN_H)).current;
     const backdrop   = useRef(new Animated.Value(0)).current;
     const [rendered, setRendered] = useState(false);
@@ -87,7 +89,7 @@ const BottomSheet = ({ visible, onClose, children, sheetStyle }) => {
                     <Pressable style={StyleSheet.absoluteFill} onPress={requestClose} />
                 </Animated.View>
 
-                <Animated.View style={[styles.sheet, sheetStyle, { transform: [{ translateY }] }]}>
+                <Animated.View style={[styles.sheet, sheetStyle, { paddingBottom: Math.max(insets.bottom, 20), transform: [{ translateY }] }]}>
                     <View style={styles.handleArea} {...pan.panHandlers}>
                         <View style={styles.handle} />
                     </View>
@@ -105,8 +107,8 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.white,
         borderTopLeftRadius: 24,
         borderTopRightRadius: 24,
-        paddingBottom: 32,
         overflow: 'hidden',
+        // paddingBottom is applied dynamically from the safe-area inset.
     },
     handleArea: { alignItems: 'center', paddingTop: 12, paddingBottom: 6 },
     handle:     { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E0E0E0' },

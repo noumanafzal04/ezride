@@ -106,7 +106,7 @@ const SignupScreen = ({ navigation }) => {
     return (
         <KeyboardAvoidingView
             style={styles.root}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
 
@@ -115,8 +115,10 @@ const SignupScreen = ({ navigation }) => {
             </View>
 
             <ScrollView
+                style={{ flex: 1 }}
                 contentContainerStyle={styles.formContainer}
                 keyboardShouldPersistTaps="handled"
+                automaticallyAdjustKeyboardInsets={true}
                 showsVerticalScrollIndicator={false}
             >
                 <Text style={styles.title}>Sign Up</Text>

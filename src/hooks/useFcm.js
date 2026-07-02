@@ -17,7 +17,6 @@ const routeFor = (data = {}) => {
         return id ? ['ChatDetail', { conversationId: id }] : ['Messages'];
     }
     if (t.startsWith('service_booking')) return ['MyServiceRequests'];
-    if (t.startsWith('listing')) return ['Marketplace'];
     if (t.startsWith('inspection')) return ['MyInspections'];
     if (t.startsWith('booking') || t.startsWith('ride')) return ['Notifications'];
     return ['Notifications'];

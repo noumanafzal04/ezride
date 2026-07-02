@@ -9,7 +9,9 @@ import AvailableRidesScreen from './user/AvailableRidesScreen';
 import MyBookingsScreen from './user/MyBookingsScreen';
 import RideRequestsScreen from './driver/RideRequestsScreen';
 
-// Footer "Rides" tab: Find Rides (browse all, default) + My Rides (bookings/requests).
+// Footer "Rides" tab.
+//  - Driver → straight to their posted ride + incoming offers (no "Find Rides").
+//  - Rider  → Find Rides (browse) + My Rides (bookings).
 const RidesHubScreen = ({ navigation }) => {
     const { role } = useApp();
     const isDriver = role === 'driver';
@@ -23,22 +25,26 @@ const RidesHubScreen = ({ navigation }) => {
                 <TouchableOpacity onPress={() => setSidebarOpen(true)}>
                     <Icon name="menu" size={24} color="#07163B" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Rides</Text>
+                <Text style={styles.headerTitle}>{isDriver ? 'My Rides' : 'Rides'}</Text>
                 <View style={{ width: 24 }} />
             </View>
 
-            <TopTabs
-                tabs={[{ key: 'find', label: 'Find Rides' }, { key: 'mine', label: isDriver ? 'My Posted Rides' : 'My Rides' }]}
-                active={tab}
-                onChange={setTab}
-            />
-
-            {tab === 'find' ? (
-                <AvailableRidesScreen navigation={navigation} embedded />
-            ) : isDriver ? (
+            {isDriver ? (
+                // Driver: their posted ride + the offers/riders they receive.
                 <RideRequestsScreen navigation={navigation} embedded />
             ) : (
-                <MyBookingsScreen navigation={navigation} embedded />
+                <>
+                    <TopTabs
+                        tabs={[{ key: 'find', label: 'Find Rides' }, { key: 'mine', label: 'My Rides' }]}
+                        active={tab}
+                        onChange={setTab}
+                    />
+                    {tab === 'find' ? (
+                        <AvailableRidesScreen navigation={navigation} embedded />
+                    ) : (
+                        <MyBookingsScreen navigation={navigation} embedded />
+                    )}
+                </>
             )}
 
             <Sidebar visible={sidebarOpen} onClose={() => setSidebarOpen(false)} navigation={navigation} activeRoute="Rides" />

@@ -11,13 +11,17 @@ import Fonts from '../../constants/fonts';
 import { fileUrl } from '../../utils/media';
 import { useAvailableRides, useBookSeat } from '../../hooks/useAvailableRides';
 import { useMyBookings, useCancelBooking } from '../../hooks/useMyBookings';
+import { useCompleteBooking, useRateBooking } from '../../hooks/useReview';
 import { useRideAlerts, useCreateRideAlert, useDeleteRideAlert } from '../../hooks/useRideAlerts';
 import { useRidesRealtime, useRealtimeConnected } from '../../hooks/useRealtime';
 import { useCities } from '../../hooks/useLookup';
 import SelectSheet from '../../components/SelectSheet';
 import Avatar from '../../components/Avatar';
 import { RideCardSkeleton } from '../../components/Skeletons';
+import ReviewSheet from '../../components/ReviewSheet';
 import { useBottomInset } from '../../hooks/useBottomInset';
+import { useModules } from '../../hooks/useModules';
+import useLocationStore from '../../store/locationStore';
 
 const ymd = (d) => {
     const p = (n) => String(n).padStart(2, '0');
@@ -75,6 +79,9 @@ const mapRide = (p) => {
 
 const AvailableRidesScreen = ({ navigation, embedded = false }) => {
     const pb = useBottomInset();
+    const { isEnabled } = useModules();
+    // Quick inspection access on the find-ride screen when there's no full search hub.
+    const showInspectBtn = !embedded && isEnabled('inspection');
     // Live while the socket is up; poll only as a fallback if it drops.
     const liveConnected = useRealtimeConnected();
     const fallbackPoll = liveConnected ? false : 15000;
@@ -107,6 +114,19 @@ const AvailableRidesScreen = ({ navigation, embedded = false }) => {
         onSuccess: () => Toast.show({ type: 'success', text1: 'Booking Cancelled' }),
         onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
     });
+
+    // Rider completes the ride → then the review form pops.
+    const [reviewFor, setReviewFor] = useState(null);
+    const completeBooking = useCompleteBooking({
+        onError: (err) => Toast.show({ type: 'error', text1: 'Failed', text2: err.response?.data?.message || 'Try again.' }),
+    });
+    const rate = useRateBooking({
+        onSuccess: () => { setReviewFor(null); Toast.show({ type: 'success', text1: 'Thanks for your review!' }); },
+        onError: (err) => Toast.show({ type: 'error', text1: 'Could not submit', text2: err.response?.data?.message || 'Try again.' }),
+    });
+    const completeRide = (booking) => {
+        completeBooking.mutate(booking.id, { onSuccess: () => setReviewFor(booking) });
+    };
 
     const confirmCancelRide = (booking) => {
         Alert.alert('Cancel booking?', 'Your seat request will be withdrawn.', [
@@ -231,7 +251,14 @@ const AvailableRidesScreen = ({ navigation, embedded = false }) => {
 
     const sendBooking = () => {
         if (!bookingModal) return;
-        bookMutation.mutate({ ridePostId: bookingModal.id, seats: seatsRequested, note });
+        const coords = useLocationStore.getState().coords;
+        bookMutation.mutate({
+            ridePostId: bookingModal.id,
+            seats: seatsRequested,
+            note,
+            pickup_lat: coords?.lat ?? null,
+            pickup_lng: coords?.lng ?? null,
+        });
     };
 
     const totalPrice = bookingModal ? bookingModal.pricePerSeat * seatsRequested : 0;
@@ -528,14 +555,34 @@ const AvailableRidesScreen = ({ navigation, embedded = false }) => {
                         </View>
                     )}
 
-                    <TouchableOpacity
-                        style={styles.activeCancelBtn}
-                        onPress={() => confirmCancelRide(b)}
-                        disabled={cancelBooking.isPending}
-                    >
-                        <Icon name="close-circle-outline" size={16} color="#D83F54" />
-                        <Text style={styles.activeCancelText}>Cancel Booking</Text>
-                    </TouchableOpacity>
+                    {(() => {
+                        const departed = ride.departure_at && new Date(ride.departure_at).getTime() < Date.now();
+                        // Once the ride has started or its time has passed → rider completes it.
+                        if (isStarted || (isAccepted && departed)) {
+                            return (
+                                <TouchableOpacity
+                                    style={styles.activeCompleteBtn}
+                                    onPress={() => completeRide(b)}
+                                    disabled={completeBooking.isPending}
+                                >
+                                    <Icon name="check-circle" size={17} color="#07163B" />
+                                    <Text style={styles.activeCompleteText}>
+                                        {completeBooking.isPending ? 'Completing…' : 'Complete Ride'}
+                                    </Text>
+                                </TouchableOpacity>
+                            );
+                        }
+                        return (
+                            <TouchableOpacity
+                                style={styles.activeCancelBtn}
+                                onPress={() => confirmCancelRide(b)}
+                                disabled={cancelBooking.isPending}
+                            >
+                                <Icon name="close-circle-outline" size={16} color="#D83F54" />
+                                <Text style={styles.activeCancelText}>Cancel Booking</Text>
+                            </TouchableOpacity>
+                        );
+                    })()}
                 </View>
 
                 <Text style={styles.activeHint}>You can book a new ride once this one is complete.</Text>
@@ -765,6 +812,28 @@ const AvailableRidesScreen = ({ navigation, embedded = false }) => {
                 onConfirm={(selected) => { setShowDate(false); setDateObj(selected); }}
                 onCancel={() => setShowDate(false)}
             />
+
+            {/* Quick "Request Inspection" footer button (find-ride screen, inspection module on) */}
+            {showInspectBtn && (
+                <TouchableOpacity
+                    style={[styles.inspectFab, { paddingBottom: pb - 8 }]}
+                    activeOpacity={0.9}
+                    onPress={() => navigation.navigate('InspectionRequest')}
+                >
+                    <Icon name="clipboard-check-outline" size={18} color="#FFFFFF" />
+                    <Text style={styles.inspectFabTxt}>Request Inspection</Text>
+                </TouchableOpacity>
+            )}
+
+            {/* Review form after the rider completes the ride */}
+            <ReviewSheet
+                visible={!!reviewFor}
+                onClose={() => setReviewFor(null)}
+                submitting={rate.isPending}
+                title="How was your ride?"
+                subtitle={reviewFor ? `${reviewFor.ride?.from_city || ''} → ${reviewFor.ride?.to_city || ''}` : ''}
+                onSubmit={(rating, review) => reviewFor && rate.mutate({ id: reviewFor.id, rating, review })}
+            />
         </View>
     );
 };
@@ -773,6 +842,13 @@ const AvailableRidesScreen = ({ navigation, embedded = false }) => {
 
 const styles = StyleSheet.create({
     root: { flex: 1, backgroundColor: '#F5F5F7' },
+    inspectFab: {
+        position: 'absolute', left: 16, right: 16, bottom: 0,
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+        backgroundColor: '#07163B', borderRadius: 14, paddingTop: 14,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 10, elevation: 6,
+    },
+    inspectFabTxt: { fontSize: 14.5, fontFamily: Fonts.semiBold, color: '#FFFFFF' },
 
     // ── Header ────────────────────────────────────────────────────────────
     header: {
@@ -829,6 +905,11 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF0F2', marginTop: 12,
     },
     activeCancelText: { fontSize: 14, fontFamily: Fonts.semiBold, color: '#D83F54' },
+    activeCompleteBtn: {
+        flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+        paddingVertical: 14, borderRadius: 10, backgroundColor: '#FFD400', marginTop: 12,
+    },
+    activeCompleteText: { fontSize: 14.5, fontFamily: Fonts.semiBold, color: '#07163B' },
     activeHint: { fontSize: 12, fontFamily: Fonts.regular, color: '#9E9E9E', textAlign: 'center', marginTop: 14 },
     pendingBar: {
         flexDirection: 'row', alignItems: 'center', gap: 7,

@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    StatusBar, TextInput, Platform,
+    StatusBar, TextInput, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import DatePicker from 'react-native-date-picker';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Fonts from '../../constants/fonts';
 import { useCities } from '../../hooks/useLookup';
 import { useCurrentLocation } from '../../hooks/useLocation';
@@ -131,12 +130,13 @@ const InspectionRequestScreen = ({ navigation }) => {
                 <MyInspectionsScreen navigation={navigation} embedded />
             ) : (
             <>
-            <KeyboardAwareScrollView
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <ScrollView
+                style={{ flex: 1 }}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 120 + insets.bottom }}
+                contentContainerStyle={{ paddingBottom: 24 }}
                 keyboardShouldPersistTaps="handled"
-                enableOnAndroid
-                extraScrollHeight={20}
+                automaticallyAdjustKeyboardInsets={true}
             >
                 <View style={styles.body}>
                     {/* Intro */}
@@ -227,7 +227,7 @@ const InspectionRequestScreen = ({ navigation }) => {
                         />
                     </View>
                 </View>
-            </KeyboardAwareScrollView>
+            </ScrollView>
 
             <View style={[styles.bottomBtn, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity
@@ -239,6 +239,7 @@ const InspectionRequestScreen = ({ navigation }) => {
                     <Text style={styles.submitText}>{submitting ? 'Submitting…' : 'Submit Request'}</Text>
                 </TouchableOpacity>
             </View>
+            </KeyboardAvoidingView>
             </>
             )}
 
@@ -303,8 +304,7 @@ const styles = StyleSheet.create({
     selectPH:  { flex: 1, fontSize: 14, fontFamily: Fonts.regular, color: '#9CA3AF' },
 
     bottomBtn: {
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28,
+        backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 12,
         borderTopWidth: 1, borderTopColor: '#EAEDEE',
     },
     submitBtn: { backgroundColor: '#FFD400', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },

@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView,
-    TouchableOpacity, StatusBar, Image, Platform,
+    TouchableOpacity, StatusBar, Image, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import DatePicker from 'react-native-date-picker';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Fonts from '../../constants/fonts';
 import config from '../../config';
 import Input from '../../components/Input';
@@ -85,7 +84,8 @@ const EditProfileScreen = ({ navigation }) => {
                 <View style={{ width: 24 }} />
             </View>
 
-            <KeyboardAwareScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }} keyboardShouldPersistTaps="handled" enableOnAndroid extraScrollHeight={20}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={true}>
 
                 {/* Avatar */}
                 <View style={styles.avatarSection}>
@@ -150,7 +150,7 @@ const EditProfileScreen = ({ navigation }) => {
                     <Input placeholder="Address" value={address} onChangeText={setAddress} multiline numberOfLines={2} style={styles.inputSpacing} />
                     <Input placeholder="Bio" value={bio} onChangeText={setBio} multiline numberOfLines={3} style={{ marginBottom: 0 }} />
                 </View>
-            </KeyboardAwareScrollView>
+            </ScrollView>
 
             <DatePicker
                 modal
@@ -181,6 +181,7 @@ const EditProfileScreen = ({ navigation }) => {
                     <Text style={styles.saveText}>{updateProfile.isPending ? 'Saving…' : 'Save Changes'}</Text>
                 </TouchableOpacity>
             </View>
+            </KeyboardAvoidingView>
         </View>
     );
 };
@@ -241,9 +242,8 @@ const styles = StyleSheet.create({
     genderTextActive: { color: '#111111', fontFamily: Fonts.semiBold },
 
     bottomBtns: {
-        position: 'absolute', bottom: 0, left: 0, right: 0,
         flexDirection: 'row', gap: 12, backgroundColor: '#FFFFFF',
-        paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28,
+        paddingHorizontal: 16, paddingTop: 12,
         borderTopWidth: 1, borderTopColor: '#EAEDEE',
     },
     cancelBtn: { flex: 1, borderWidth: 1.5, borderColor: '#EF4444', borderRadius: 12, paddingVertical: 15, alignItems: 'center' },

@@ -1,14 +1,13 @@
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    StatusBar, TextInput, Switch, Image, Alert, Platform,
+    StatusBar, TextInput, Switch, Image, Alert, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import DatePicker from 'react-native-date-picker';
 import { useMutation } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Colors from '../../constants/colors';
 import Fonts from '../../constants/fonts';
 import { useCities, useVehicleMakes, useVehicleModels } from '../../hooks/useLookup';
@@ -547,51 +546,53 @@ const DriverOnboardingScreen = ({ navigation }) => {
                 <View style={{ width: 40 }} />
             </View>
 
-            <KeyboardAwareScrollView
-                contentContainerStyle={[styles.scroll, { paddingBottom: 110 + insets.bottom }]}
-                keyboardShouldPersistTaps="handled"
-                showsVerticalScrollIndicator={false}
-                enableOnAndroid
-                extraScrollHeight={20}
-            >
-                <View style={styles.card}>
-                    <Text style={styles.stepText}>Step {step} of {TOTAL_STEPS}</Text>
-                    <View style={styles.progressTrack}>
-                        <View style={[styles.progressFill, { width: `${(step / TOTAL_STEPS) * 100}%` }]} />
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+                <ScrollView
+                    style={{ flex: 1 }}
+                    contentContainerStyle={[styles.scroll, { paddingBottom: 24 }]}
+                    keyboardShouldPersistTaps="handled"
+                    showsVerticalScrollIndicator={false}
+                    automaticallyAdjustKeyboardInsets={true}
+                >
+                    <View style={styles.card}>
+                        <Text style={styles.stepText}>Step {step} of {TOTAL_STEPS}</Text>
+                        <View style={styles.progressTrack}>
+                            <View style={[styles.progressFill, { width: `${(step / TOTAL_STEPS) * 100}%` }]} />
+                        </View>
+
+                        {step === 1 && renderStep1()}
+                        {step === 2 && renderStep2()}
+                        {step === 3 && renderStep3()}
+                        {step === 4 && renderStep4()}
                     </View>
+                </ScrollView>
 
-                    {step === 1 && renderStep1()}
-                    {step === 2 && renderStep2()}
-                    {step === 3 && renderStep3()}
-                    {step === 4 && renderStep4()}
-                </View>
-            </KeyboardAwareScrollView>
-
-            {/* Footer — accounts for Android nav bar */}
-            <View style={[styles.footer, { paddingBottom: 16 + insets.bottom }]}>
-                <View style={styles.footerRow}>
-                    {step > 1 && (
+                {/* Footer — fixed, lifts with the keyboard */}
+                <View style={[styles.footer, { paddingBottom: insets.bottom + 14 }]}>
+                    <View style={styles.footerRow}>
+                        {step > 1 && (
+                            <TouchableOpacity
+                                style={styles.backBtnFooter}
+                                onPress={handleBack}
+                                activeOpacity={0.8}
+                            >
+                                <Icon name="arrow-left" size={18} color={Colors.textDark} />
+                                <Text style={styles.backBtnText}>Back</Text>
+                            </TouchableOpacity>
+                        )}
                         <TouchableOpacity
-                            style={styles.backBtnFooter}
-                            onPress={handleBack}
-                            activeOpacity={0.8}
+                            style={[styles.nextBtn, isSubmitting && styles.nextBtnDisabled]}
+                            onPress={handleNext}
+                            disabled={isSubmitting}
+                            activeOpacity={0.85}
                         >
-                            <Icon name="arrow-left" size={18} color={Colors.textDark} />
-                            <Text style={styles.backBtnText}>Back</Text>
+                            <Text style={styles.nextText}>
+                                {isSubmitting ? 'Submitting...' : step === TOTAL_STEPS ? 'Submit' : 'Next Step'}
+                            </Text>
                         </TouchableOpacity>
-                    )}
-                    <TouchableOpacity
-                        style={[styles.nextBtn, isSubmitting && styles.nextBtnDisabled]}
-                        onPress={handleNext}
-                        disabled={isSubmitting}
-                        activeOpacity={0.85}
-                    >
-                        <Text style={styles.nextText}>
-                            {isSubmitting ? 'Submitting...' : step === TOTAL_STEPS ? 'Submit' : 'Next Step'}
-                        </Text>
-                    </TouchableOpacity>
+                    </View>
                 </View>
-            </View>
+            </KeyboardAvoidingView>
 
             {/* Image picker sheet */}
             <ImagePickerSheet
@@ -745,7 +746,7 @@ const styles = StyleSheet.create({
     switchRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, borderTopWidth: 1, borderTopColor: '#F3F4F6', marginTop: 4 },
     switchLabel: { fontSize: 14, fontFamily: Fonts.medium, color: Colors.textDark },
 
-    footer:         { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 16, paddingTop: 16, backgroundColor: Colors.white, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
+    footer:         { paddingHorizontal: 16, paddingTop: 16, backgroundColor: Colors.white, borderTopWidth: 1, borderTopColor: '#F0F0F0' },
     footerRow:      { flexDirection: 'row', gap: 10 },
     backBtnFooter:  { flex: 3, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 16, borderRadius: 14, borderWidth: 1.5, borderColor: '#E5E7EB', backgroundColor: Colors.white },
     backBtnText:    { fontSize: 15, fontFamily: Fonts.semiBold, color: Colors.textDark },

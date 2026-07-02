@@ -11,7 +11,7 @@ import useAuth from '../../hooks/useAuth';
 import { useApp } from '../../context/AppContext';
 
 const LoginScreen = ({navigation}) => {
-    const [email, setEmail] = useState('noman1@app.com');
+    const [email, setEmail] = useState('user@app.com');
     const [password, setPassword] = useState('Password@123');
     const [errors, setErrors] = useState({});
 
@@ -77,7 +77,7 @@ const LoginScreen = ({navigation}) => {
     return (
         <KeyboardAvoidingView
             style={styles.root}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         >
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content"/>
 

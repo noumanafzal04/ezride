@@ -92,7 +92,7 @@ const OTPScreen = ({ navigation, route }) => {
     const formatTime = (s) => `00:${s.toString().padStart(2, '0')}`;
 
     return (
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <View style={styles.container}>
                 <StatusBar backgroundColor={Colors.white} barStyle="dark-content" />
 

@@ -4,22 +4,6 @@ import Skeleton from './Skeleton';
 
 const arr = (n) => Array.from({ length: n });
 
-// 2-column car grid (Marketplace, Home featured).
-export const CarGridSkeleton = ({ count = 6 }) => (
-    <View style={s.grid}>
-        {arr(count).map((_, i) => (
-            <View key={i} style={s.card}>
-                <Skeleton width="100%" height={110} radius={0} />
-                <View style={s.cardBody}>
-                    <Skeleton width="75%" height={12} />
-                    <Skeleton width="45%" height={15} />
-                    <Skeleton width="85%" height={10} />
-                </View>
-            </View>
-        ))}
-    </View>
-);
-
 // Avatar + two lines rows (providers, bookings, generic lists).
 export const RowListSkeleton = ({ count = 6 }) => (
     <View style={s.rows}>
@@ -60,23 +44,6 @@ export const ChatSkeleton = ({ count = 7 }) => (
                 </View>
             );
         })}
-    </View>
-);
-
-// 2-column rental grid — matches RentalsScreen card (110px image + 4 text lines).
-export const RentalGridSkeleton = ({ count = 6 }) => (
-    <View style={s.rentalGrid}>
-        {arr(count).map((_, i) => (
-            <View key={i} style={s.rentalCard}>
-                <Skeleton width="100%" height={110} radius={0} />
-                <View style={s.rentalBody}>
-                    <Skeleton width="80%" height={12} />
-                    <Skeleton width="50%" height={15} />
-                    <Skeleton width="90%" height={10} />
-                    <Skeleton width="40%" height={10} />
-                </View>
-            </View>
-        ))}
     </View>
 );
 
@@ -164,7 +131,7 @@ const s = StyleSheet.create({
     detail: { padding: 18, gap: 10 },
     detailGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginTop: 12 },
 
-    chat: { padding: 16, gap: 14 },
+    chat: { flex: 1, padding: 16, gap: 14, justifyContent: 'flex-end' },
     chatRow: { alignItems: 'flex-start' },
     chatRowMine: { alignItems: 'flex-end' },
 
@@ -185,4 +152,4 @@ const s = StyleSheet.create({
     pageRowText: { flex: 1, gap: 8 },
 });
 
-export default { CarGridSkeleton, RowListSkeleton, TilesSkeleton, DetailSkeleton, RentalGridSkeleton, RideCardSkeleton, PageSkeleton };
+export default { RowListSkeleton, TilesSkeleton, DetailSkeleton, RideCardSkeleton, PageSkeleton };

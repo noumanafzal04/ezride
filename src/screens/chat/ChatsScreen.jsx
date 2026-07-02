@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, FlatList,
     TouchableOpacity, StatusBar, ActivityIndicator,
@@ -6,8 +6,15 @@ import {
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../../constants/fonts';
 import Skeleton from '../../components/Skeleton';
+import TopTabs from '../../components/TopTabs';
 import { useConversations } from '../../hooks/useChat';
 import { useRealtimeConnected } from '../../hooks/useRealtime';
+
+const CHAT_TABS = [
+    { key: 'all', label: 'All' },
+    { key: 'ride', label: 'Rides' },
+    { key: 'unread', label: 'Unread' },
+];
 
 // Colored module tag so you can tell which module a chat belongs to.
 const MODULE_BADGE = {
@@ -36,7 +43,13 @@ const ChatsScreen = ({ navigation }) => {
         refetchInterval: connected ? false : 20000,
         refetchIntervalInBackground: false,
     });
-    const items = (query.data?.pages || []).flatMap(p => p.conversations || []);
+    const allItems = (query.data?.pages || []).flatMap(p => p.conversations || []);
+    const [tab, setTab] = useState('all');
+    const items = tab === 'all'
+        ? allItems
+        : tab === 'unread'
+            ? allItems.filter(c => c.unread_count > 0)
+            : allItems.filter(c => c.type === tab);
 
     const renderItem = ({ item }) => (
         <TouchableOpacity
@@ -85,6 +98,8 @@ const ChatsScreen = ({ navigation }) => {
             <View style={styles.header}>
                 <Text style={styles.headerTitle}>Messages</Text>
             </View>
+
+            <TopTabs tabs={CHAT_TABS} active={tab} onChange={setTab} />
 
             <FlatList
                 data={items}

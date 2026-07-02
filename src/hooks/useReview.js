@@ -12,6 +12,15 @@ const useInvalidateBookings = () => {
     };
 };
 
+export const useCompleteBooking = (options = {}) => {
+    const invalidate = useInvalidateBookings();
+    return useMutation({
+        mutationFn: (id) => rideService.completeBooking(id),
+        onSuccess: (...a) => { invalidate(); options.onSuccess?.(...a); },
+        onError: options.onError,
+    });
+};
+
 export const useRateBooking = (options = {}) => {
     const invalidate = useInvalidateBookings();
     return useMutation({

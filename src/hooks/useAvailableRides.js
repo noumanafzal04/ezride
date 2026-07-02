@@ -47,11 +47,11 @@ export const useNewRidesCount = (filters = {}, afterId = 0, enabled = true) =>
         staleTime: 0,
     });
 
-// Rider: book seats on a ride post
+// Rider: book seats on a ride post (pickup_lat/lng → driver sees rider distance)
 export const useBookSeat = (options = {}) =>
     useMutation({
-        mutationFn: ({ ridePostId, seats, note }) =>
-            rideService.bookSeat(ridePostId, { seats, note }),
+        mutationFn: ({ ridePostId, seats, note, pickup_lat, pickup_lng }) =>
+            rideService.bookSeat(ridePostId, { seats, note, pickup_lat, pickup_lng }),
         ...options,
     });
 

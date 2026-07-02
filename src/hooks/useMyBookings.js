@@ -26,4 +26,17 @@ export const useCancelBooking = (options = {}) => {
     });
 };
 
+// Rider: confirm the ride is complete (after the driver has started it).
+export const useCompleteBooking = (options = {}) => {
+    const qc = useQueryClient();
+    return useMutation({
+        mutationFn: (id) => rideService.completeBooking(id),
+        onSuccess: (...args) => {
+            qc.invalidateQueries({ queryKey: ['my-bookings'] });
+            options.onSuccess?.(...args);
+        },
+        onError: options.onError,
+    });
+};
+
 export default useMyBookings;

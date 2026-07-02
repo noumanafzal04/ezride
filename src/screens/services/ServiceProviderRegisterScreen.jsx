@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
-    StatusBar, TextInput, ActivityIndicator,
+    StatusBar, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Toast from 'react-native-toast-message';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 import Fonts from '../../constants/fonts';
 import { useCities } from '../../hooks/useLookup';
 import useMe from '../../hooks/useMe';
@@ -161,12 +160,13 @@ const ServiceProviderRegisterScreen = ({ navigation }) => {
         <View style={styles.root}>
             <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
             <Header />
-            <KeyboardAwareScrollView
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <ScrollView
+                style={{ flex: 1 }}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ padding: 16, paddingBottom: 120 + insets.bottom }}
+                contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
                 keyboardShouldPersistTaps="handled"
-                enableOnAndroid
-                extraScrollHeight={20}
+                automaticallyAdjustKeyboardInsets={true}
             >
                 <View style={styles.intro}>
                     <Icon name="tools" size={20} color="#07163B" />
@@ -221,7 +221,7 @@ const ServiceProviderRegisterScreen = ({ navigation }) => {
                         multiline textAlignVertical="top"
                     />
                 </View>
-            </KeyboardAwareScrollView>
+            </ScrollView>
 
             <View style={[styles.bottomBtn, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity
@@ -233,6 +233,7 @@ const ServiceProviderRegisterScreen = ({ navigation }) => {
                     <Text style={styles.submitText}>{register.isPending ? 'Submitting…' : 'Submit for Approval'}</Text>
                 </TouchableOpacity>
             </View>
+            </KeyboardAvoidingView>
 
             <SelectSheet
                 visible={cityOpen}
@@ -299,7 +300,6 @@ const styles = StyleSheet.create({
     catTextOn: { color: '#07163B', fontFamily: Fonts.semiBold },
 
     bottomBtn: {
-        position: 'absolute', bottom: 0, left: 0, right: 0,
         backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 12,
         borderTopWidth: 1, borderTopColor: '#EAEDEE',
     },

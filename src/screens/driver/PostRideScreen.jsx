@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     View, Text, StyleSheet, ScrollView, TouchableOpacity,
     StatusBar, TextInput, Switch, Platform, ActivityIndicator, Alert,
+    KeyboardAvoidingView,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
@@ -14,7 +15,9 @@ import { useCities } from '../../hooks/useLookup';
 import useRideRoute from '../../hooks/useRideRoute';
 import useCreateRidePost from '../../hooks/useCreateRidePost';
 import useRidePosts, { useCancelRidePost } from '../../hooks/useRidePosts';
+import PaywallSheet from '../../components/PaywallSheet';
 import useMe from '../../hooks/useMe';
+import { useMembership } from '../../hooks/useSubscription';
 import { getCoords } from '../../services/osrmService';
 import SelectSheet from '../../components/SelectSheet';
 
@@ -75,12 +78,23 @@ const PostRideScreen = ({ navigation }) => {
     // Seats the driver can offer = vehicle capacity − 1 (their own seat excluded)
     const { data: me } = useMe();
     const isVerified = me?.driver_profile?.verification_status === 'verified';
+
+    // Billing status (known up-front) — so we tell the driver BEFORE they fill the
+    // form that their free rides / pass are used, instead of blocking on submit.
+    const { data: membership, refetch: refetchMembership } = useMembership();
+    const rideBilling = membership?.modules?.find(m => m.module === 'ride');
+    const billingLocked = !!rideBilling?.enforcement_enabled
+        && (rideBilling?.free_left ?? 0) <= 0
+        && !(rideBilling?.has_active_plan && (rideBilling?.posts_left ?? 0) > 0);
+    const freeLeft = rideBilling?.enforcement_enabled ? (rideBilling?.free_left ?? 0) : null;
     const vehicleSeats = me?.vehicles?.[0]?.seating_capacity || 5;
     const maxSeats = Math.max(1, vehicleSeats - 1);
     const seatOptions = Array.from({ length: maxSeats }, (_, i) => i + 1);
     const [pricePerSeat, setPricePerSeat]   = useState('');
-    const [luggageAllowed, setLuggageAllowed] = useState(false);
+    const [luggageAllowed] = useState(true);   // default on; not shown in the form
     const [notes, setNotes]                 = useState('');
+    const [errors, setErrors]               = useState({}); // border-on-error per field
+    const [seatDropOpen, setSeatDropOpen]   = useState(false);
 
     // ── City picker (one sheet, shared between From / To) ──────────────────────
     const [cityField, setCityField]   = useState(null); // 'from' | 'to'
@@ -112,6 +126,9 @@ const PostRideScreen = ({ navigation }) => {
     }, [distanceKm]);
 
     // ── Submit ──────────────────────────────────────────────────────────────--
+    const [paywallOpen, setPaywallOpen] = useState(false);
+    const lastPayloadRef = useRef(null);
+
     const createPost = useCreateRidePost({
         onSuccess: () => {
             Toast.show({ type: 'success', text1: 'Ride Posted!', text2: 'Your ride is now live for riders.' });
@@ -119,22 +136,36 @@ const PostRideScreen = ({ navigation }) => {
             navigation.navigate('Main', { screen: 'Rides' });
         },
         onError: (err) => {
+            // 402 = free posts used up → show the 24h pass paywall instead of a toast.
+            if (err.response?.status === 402) { setPaywallOpen(true); return; }
             const msg = err.response?.data?.message || 'Could not post the ride. Please try again.';
             Toast.show({ type: 'error', text1: 'Failed', text2: msg });
         },
     });
 
     const validate = () => {
-        if (!fromCity)                 return 'Please select the departure city.';
-        if (!toCity)                   return 'Please select the destination city.';
-        if (fromCity.id === toCity.id) return 'Departure and destination must differ.';
-        if (!fromAddress.trim())       return 'Please enter the pickup address.';
-        if (!toAddress.trim())         return 'Please enter the drop-off address.';
-        if (!departureAt)              return 'Please choose a departure date & time.';
-        if (departureAt.getTime() < Date.now()) return 'Departure time must be in the future.';
-        if (!Number(pricePerSeat))     return 'Price per seat is required.';
+        const e = {};
+        if (!fromCity) e.fromCity = true;
+        if (!toCity) e.toCity = true;
+        if (fromCity && toCity && fromCity.id === toCity.id) e.toCity = true;
+        if (!fromAddress.trim()) e.fromAddress = true;
+        if (!toAddress.trim()) e.toAddress = true;
+        if (!departureAt || departureAt.getTime() < Date.now()) e.departureAt = true;
+        if (!availableSeats || availableSeats < 1 || availableSeats > maxSeats) e.seats = true;
+        if (!Number(pricePerSeat)) e.price = true;
+        setErrors(e);
+
+        if (e.fromCity) return 'Please select the departure city.';
+        if (e.toCity) return (fromCity && toCity && fromCity.id === toCity.id)
+            ? 'Departure and destination must differ.' : 'Please select the destination city.';
+        if (e.fromAddress) return 'Please enter the pickup address.';
+        if (e.toAddress) return 'Please enter the drop-off address.';
+        if (e.departureAt) return 'Please choose a valid departure date & time.';
+        if (e.seats) return 'Please select the number of available seats.';
+        if (e.price) return 'Price per seat is required.';
         return null;
     };
+    const clearError = (k) => setErrors(p => (p[k] ? { ...p, [k]: false } : p));
 
     const handleSubmit = () => {
         if (!isVerified) {
@@ -150,7 +181,7 @@ const PostRideScreen = ({ navigation }) => {
         const from = getCoords(fromCity);
         const to   = getCoords(toCity);
 
-        createPost.mutate({
+        const payload = {
             from_city_id:  fromCity.id,
             to_city_id:    toCity.id,
             from_address:  fromAddress.trim(),
@@ -165,7 +196,9 @@ const PostRideScreen = ({ navigation }) => {
             luggage_allowed: luggageAllowed,
             notes:          notes.trim(),
             post_type:      postType,
-        });
+        };
+        lastPayloadRef.current = payload;   // kept so we can retry after buying a pass
+        createPost.mutate(payload);
     };
 
     const submitting = createPost.isPending;
@@ -280,10 +313,13 @@ const PostRideScreen = ({ navigation }) => {
                 <View style={{ width: 24 }} />
             </View>
 
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <ScrollView
+                style={{ flex: 1 }}
                 showsVerticalScrollIndicator={false}
-                contentContainerStyle={{ paddingBottom: 130 + insets.bottom }}
+                contentContainerStyle={{ paddingBottom: 16 }}
                 keyboardShouldPersistTaps="handled"
+                automaticallyAdjustKeyboardInsets={true}
             >
                 <View style={styles.body}>
                     {!isVerified && (
@@ -294,29 +330,30 @@ const PostRideScreen = ({ navigation }) => {
                             </Text>
                         </View>
                     )}
-                    <View style={styles.mainCard}>
 
-                        {/* Post type */}
-                        <View style={styles.typeRow}>
-                            {POST_TYPES.map(t => {
-                                const active = postType === t.id;
-                                return (
-                                    <TouchableOpacity
-                                        key={t.id}
-                                        style={[styles.typeBtn, active && styles.typeBtnActive]}
-                                        onPress={() => setPostType(t.id)}
-                                        activeOpacity={0.85}
-                                    >
-                                        <Icon name={t.icon} size={18} color={active ? '#07163B' : '#9CA3AF'} />
-                                        <Text style={[styles.typeLabel, active && styles.typeLabelActive]}>{t.label}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
+                    {/* Billing gate — shown up-front so the driver knows before filling the form. */}
+                    {isVerified && billingLocked && (
+                        <TouchableOpacity style={styles.lockBanner} activeOpacity={0.9} onPress={() => setPaywallOpen(true)}>
+                            <View style={styles.lockIcon}><Icon name="lock-open-variant-outline" size={20} color="#07163B" /></View>
+                            <View style={{ flex: 1 }}>
+                                <Text style={styles.lockTitle}>Unlock posting</Text>
+                                <Text style={styles.lockSub}>Your free rides are used. Get a 24-hour pass to post.</Text>
+                            </View>
+                            <View style={styles.lockBtn}><Text style={styles.lockBtnTxt}>Unlock</Text></View>
+                        </TouchableOpacity>
+                    )}
+                    {isVerified && !billingLocked && freeLeft != null && freeLeft <= 2 && freeLeft > 0 && (
+                        <View style={styles.freeHint}>
+                            <Icon name="gift-outline" size={15} color="#0B6B22" />
+                            <Text style={styles.freeHintTxt}>{freeLeft} free ride{freeLeft > 1 ? 's' : ''} left, then a 24-hour pass.</Text>
                         </View>
+                    )}
+
+                    <View style={styles.mainCard}>
 
                         {/* From city */}
                         <Text style={styles.label}>From</Text>
-                        <TouchableOpacity style={styles.selectBox} onPress={() => openCity('from')}>
+                        <TouchableOpacity style={[styles.selectBox, errors.fromCity && styles.errorBorder]} onPress={() => { clearError('fromCity'); openCity('from'); }}>
                             <Icon name="map-marker-outline" size={18} color="#9CA3AF" />
                             <Text style={fromCity ? styles.selectVal : styles.selectPH}>
                                 {fromCity?.name || 'Select departure city'}
@@ -325,17 +362,17 @@ const PostRideScreen = ({ navigation }) => {
                         </TouchableOpacity>
                         {fromCity && (
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, errors.fromAddress && styles.errorBorder]}
                                 placeholder="Pickup address (area, street...)"
                                 placeholderTextColor="#9CA3AF"
                                 value={fromAddress}
-                                onChangeText={setFromAddress}
+                                onChangeText={(t) => { clearError('fromAddress'); setFromAddress(t); }}
                             />
                         )}
 
                         {/* To city */}
                         <Text style={styles.label}>To</Text>
-                        <TouchableOpacity style={styles.selectBox} onPress={() => openCity('to')}>
+                        <TouchableOpacity style={[styles.selectBox, errors.toCity && styles.errorBorder]} onPress={() => { clearError('toCity'); openCity('to'); }}>
                             <Icon name="map-marker-check-outline" size={18} color="#9CA3AF" />
                             <Text style={toCity ? styles.selectVal : styles.selectPH}>
                                 {toCity?.name || 'Select destination city'}
@@ -344,11 +381,11 @@ const PostRideScreen = ({ navigation }) => {
                         </TouchableOpacity>
                         {toCity && (
                             <TextInput
-                                style={styles.input}
+                                style={[styles.input, errors.toAddress && styles.errorBorder]}
                                 placeholder="Drop-off address (area, street...)"
                                 placeholderTextColor="#9CA3AF"
                                 value={toAddress}
-                                onChangeText={setToAddress}
+                                onChangeText={(t) => { clearError('toAddress'); setToAddress(t); }}
                             />
                         )}
 
@@ -371,18 +408,46 @@ const PostRideScreen = ({ navigation }) => {
                             </View>
                         )}
 
-                        {/* Departure */}
-                        <Text style={styles.label}>Departure</Text>
-                        <TouchableOpacity
-                            style={styles.selectBox}
-                            onPress={() => setShowPicker(true)}
-                        >
-                            <Icon name="calendar-clock" size={18} color="#9CA3AF" />
-                            <Text style={departureAt ? styles.selectVal : styles.selectPH}>
-                                {departureAt ? fmtDisplay(departureAt) : 'Select date & time'}
-                            </Text>
-                            <Icon name="chevron-down" size={18} color="#9CA3AF" />
-                        </TouchableOpacity>
+                        {/* Departure (75%) + Seats dropdown (25%) */}
+                        <View style={[styles.row, { zIndex: 20 }]}>
+                            <View style={{ flex: 3 }}>
+                                <Text style={styles.label}>Departure</Text>
+                                <TouchableOpacity
+                                    style={[styles.selectBox, errors.departureAt && styles.errorBorder]}
+                                    onPress={() => { clearError('departureAt'); setShowPicker(true); }}
+                                >
+                                    <Icon name="calendar-clock" size={18} color="#9CA3AF" />
+                                    <Text style={departureAt ? styles.selectVal : styles.selectPH} numberOfLines={1}>
+                                        {departureAt ? fmtDisplay(departureAt) : 'Select date & time'}
+                                    </Text>
+                                </TouchableOpacity>
+                            </View>
+                            <View style={{ flex: 1, zIndex: 20 }}>
+                                <Text style={styles.label}>Seats</Text>
+                                <View>
+                                    <TouchableOpacity
+                                        style={[styles.selectBox, styles.seatsSelect, errors.seats && styles.errorBorder]}
+                                        onPress={() => { clearError('seats'); setSeatDropOpen(o => !o); }}
+                                    >
+                                        <Text style={styles.selectVal}>{availableSeats}</Text>
+                                        <Icon name={seatDropOpen ? 'chevron-up' : 'chevron-down'} size={16} color="#9CA3AF" />
+                                    </TouchableOpacity>
+                                    {seatDropOpen && (
+                                        <View style={styles.seatDropdown}>
+                                            {seatOptions.map(s => (
+                                                <TouchableOpacity
+                                                    key={s}
+                                                    style={[styles.seatOption, availableSeats === s && styles.seatOptionActive]}
+                                                    onPress={() => { setAvailableSeats(s); clearError('seats'); setSeatDropOpen(false); }}
+                                                >
+                                                    <Text style={[styles.seatOptionTxt, availableSeats === s && styles.seatOptionTxtActive]}>{s}</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </View>
+                                    )}
+                                </View>
+                            </View>
+                        </View>
                         <DatePicker
                             modal
                             open={showPicker}
@@ -391,23 +456,9 @@ const PostRideScreen = ({ navigation }) => {
                             minimumDate={new Date()}
                             locale="en-US"
                             theme="light"
-                            onConfirm={(d) => { setShowPicker(false); setDepartureAt(d); }}
+                            onConfirm={(d) => { setShowPicker(false); clearError('departureAt'); setDepartureAt(d); }}
                             onCancel={() => setShowPicker(false)}
                         />
-
-                        {/* Available seats */}
-                        <Text style={styles.label}>Available Seats</Text>
-                        <View style={styles.seatsRow}>
-                            {seatOptions.map(s => (
-                                <TouchableOpacity
-                                    key={s}
-                                    style={[styles.seatBtn, availableSeats === s && styles.seatBtnActive]}
-                                    onPress={() => setAvailableSeats(s)}
-                                >
-                                    <Text style={[styles.seatText, availableSeats === s && styles.seatTextActive]}>{s}</Text>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
 
                         {/* Fare — auto-calculated from distance, total updates with seats */}
                         <View style={styles.fareCard}>
@@ -443,20 +494,6 @@ const PostRideScreen = ({ navigation }) => {
                             )}
                         </View>
 
-                        {/* Luggage */}
-                        <View style={styles.switchRow}>
-                            <View>
-                                <Text style={styles.switchLabel}>Luggage Allowed</Text>
-                                <Text style={styles.switchSub}>Riders can bring luggage</Text>
-                            </View>
-                            <Switch
-                                value={luggageAllowed}
-                                onValueChange={setLuggageAllowed}
-                                trackColor={{ false: '#E5E7EB', true: '#FFD400' }}
-                                thumbColor="#FFFFFF"
-                            />
-                        </View>
-
                         {/* Notes */}
                         <Text style={styles.label}>Notes <Text style={styles.optional}>(optional)</Text></Text>
                         <TextInput
@@ -473,19 +510,25 @@ const PostRideScreen = ({ navigation }) => {
                 </View>
             </ScrollView>
 
-            {/* Submit */}
-            <View style={[styles.bottomBtn, { paddingBottom: 16 }]}>
+            {/* Fixed bottom button — sibling of the ScrollView inside the KAV, so it
+                stays pinned to the bottom AND rises above the keyboard when typing. */}
+            <View style={[styles.bottomBtn, { paddingBottom: 14 }]}>
                 <TouchableOpacity
                     style={[styles.createBtn, (submitting || !isVerified) && styles.createBtnDisabled]}
-                    onPress={handleSubmit}
+                    onPress={() => (billingLocked ? setPaywallOpen(true) : handleSubmit())}
                     disabled={submitting || !isVerified}
                     activeOpacity={0.85}
                 >
+                    {billingLocked && isVerified && <Icon name="lock-open-variant-outline" size={17} color="#07163B" style={{ marginRight: 8 }} />}
                     <Text style={styles.createBtnText}>
-                        {submitting ? 'Posting…' : !isVerified ? 'Verification pending' : 'Post Ride'}
+                        {submitting ? 'Posting…'
+                            : !isVerified ? 'Verification pending'
+                            : billingLocked ? 'Unlock 24-Hour Pass'
+                            : 'Post Ride'}
                     </Text>
                 </TouchableOpacity>
             </View>
+            </KeyboardAvoidingView>
 
             {/* City picker sheet */}
             <SelectSheet
@@ -499,6 +542,16 @@ const PostRideScreen = ({ navigation }) => {
                 onSearch={setCitySearch}
                 selectedId={cityField === 'from' ? fromCity?.id : toCity?.id}
                 onSelect={onCitySelect}
+            />
+
+            {/* 24h pass paywall — opens when free posts are used (HTTP 402) */}
+            <PaywallSheet
+                visible={paywallOpen}
+                onClose={() => setPaywallOpen(false)}
+                module="ride"
+                title="You've used your free rides"
+                subtitle="Get a 24-hour pass to post unlimited rides."
+                onSubscribed={() => { refetchMembership(); if (lastPayloadRef.current) createPost.mutate(lastPayloadRef.current); }}
             />
         </View>
     );
@@ -575,17 +628,32 @@ const styles = StyleSheet.create({
     label:    { fontSize: 13, fontFamily: Fonts.semiBold, color: '#202223', marginBottom: 2, marginTop: 4 },
     optional: { fontSize: 12, fontFamily: Fonts.regular, color: '#9CA3AF' },
 
+    // Clean filled fields — border shows ONLY on error (errorBorder).
+    row: { flexDirection: 'row', gap: 10 },
+    errorBorder: { borderWidth: 1.5, borderColor: '#DC2626', backgroundColor: '#FFF5F5' },
     selectBox: {
         flexDirection: 'row', alignItems: 'center', gap: 10,
-        borderWidth: 1, borderColor: '#D7DBDE', borderRadius: 10,
-        paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#FFFFFF',
+        borderRadius: 10, borderWidth: 1.5, borderColor: 'transparent',
+        paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#F5F6F8',
     },
+    seatsSelect: { paddingHorizontal: 12, justifyContent: 'space-between' },
+    // Inline seats dropdown (no modal) — floats above siblings via zIndex + elevation.
+    seatDropdown: {
+        position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
+        backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1, borderColor: '#EAEDEE',
+        overflow: 'hidden', zIndex: 30, elevation: 8,
+        shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.12, shadowRadius: 8,
+    },
+    seatOption: { paddingVertical: 12, paddingHorizontal: 14, alignItems: 'center' },
+    seatOptionActive: { backgroundColor: 'rgba(245,214,50,0.18)' },
+    seatOptionTxt: { fontSize: 14, fontFamily: Fonts.medium, color: '#5D5F62' },
+    seatOptionTxtActive: { color: '#07163B', fontFamily: Fonts.semiBold },
     selectVal: { flex: 1, fontSize: 14, fontFamily: Fonts.regular, color: '#07163B' },
     selectPH:  { flex: 1, fontSize: 14, fontFamily: Fonts.regular, color: '#9CA3AF' },
 
     input: {
-        borderWidth: 1, borderColor: '#D7DBDE', borderRadius: 10,
-        paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#FFFFFF',
+        borderRadius: 10, borderWidth: 1.5, borderColor: 'transparent',
+        paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#F5F6F8',
         fontFamily: Fonts.regular, fontSize: 14, color: '#07163B',
     },
     textArea: { height: 88, paddingTop: 12 },
@@ -625,13 +693,22 @@ const styles = StyleSheet.create({
     switchSub:   { fontSize: 11, fontFamily: Fonts.regular, color: '#9CA3AF', marginTop: 1 },
 
     bottomBtn: {
-        position: 'absolute', bottom: 0, left: 0, right: 0,
         backgroundColor: '#FFFFFF', paddingHorizontal: 16, paddingTop: 12,
         borderTopWidth: 1, borderTopColor: '#EAEDEE',
     },
-    createBtn:        { backgroundColor: '#FFD400', borderRadius: 12, paddingVertical: 16, alignItems: 'center' },
+    createBtn:        { flexDirection: 'row', backgroundColor: '#FFD400', borderRadius: 12, paddingVertical: 16, alignItems: 'center', justifyContent: 'center' },
     createBtnDisabled:{ backgroundColor: '#E5E7EB' },
     createBtnText:    { fontSize: 16, fontFamily: Fonts.semiBold, color: '#111111' },
+
+    // Billing gate (up-front)
+    lockBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF9DB', borderWidth: 1, borderColor: '#F6E6A8', borderRadius: 14, padding: 14, marginBottom: 14 },
+    lockIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FFE680', alignItems: 'center', justifyContent: 'center' },
+    lockTitle: { fontSize: 14, fontFamily: Fonts.semiBold, color: '#07163B' },
+    lockSub: { fontSize: 12, fontFamily: Fonts.regular, color: '#7A6A2F', marginTop: 1 },
+    lockBtn: { backgroundColor: '#07163B', borderRadius: 9, paddingHorizontal: 14, paddingVertical: 8 },
+    lockBtnTxt: { fontSize: 12.5, fontFamily: Fonts.semiBold, color: '#FFD400' },
+    freeHint: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: '#E8F8EE', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, marginBottom: 14 },
+    freeHintTxt: { fontSize: 12.5, fontFamily: Fonts.medium, color: '#0B6B22' },
 });
 
 export default PostRideScreen;

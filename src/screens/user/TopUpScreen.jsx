@@ -2,6 +2,7 @@ import React, {useState} from 'react';
 import {
     View, Text, StyleSheet, ScrollView,
     TouchableOpacity, StatusBar, TextInput,
+    KeyboardAvoidingView, Platform,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,7 +37,8 @@ const TopUpScreen = ({navigation}) => {
                 <View style={{width: 24}}/>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: 120}}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: 16}} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets={true}>
 
                 {/* Balance Card */}
                 <View style={styles.balanceCard}>
@@ -128,7 +130,7 @@ const TopUpScreen = ({navigation}) => {
                 </View>
             </ScrollView>
 
-            {/* Proceed Button */}
+            {/* Proceed Button — fixed, lifts with keyboard */}
             <View style={[styles.bottomBtn, { paddingBottom: insets.bottom + 12 }]}>
                 <TouchableOpacity
                     style={[styles.proceedBtn, !displayAmount && styles.proceedBtnDisabled]}
@@ -138,6 +140,7 @@ const TopUpScreen = ({navigation}) => {
                     <Text style={styles.proceedBtnText}>Proceed to Pay</Text>
                 </TouchableOpacity>
             </View>
+            </KeyboardAvoidingView>
         </View>
     );
 };
@@ -247,7 +250,6 @@ const styles = StyleSheet.create({
     summaryTotalValue: {fontSize: 15, fontFamily: Fonts.bold, color: '#07163B'},
 
     bottomBtn: {
-        position: 'absolute', bottom: 0, left: 0, right: 0,
         backgroundColor: '#FFFFFF',
         paddingHorizontal: 16, paddingTop: 12, paddingBottom: 28,
         borderTopWidth: 1, borderTopColor: '#EAEDEE',

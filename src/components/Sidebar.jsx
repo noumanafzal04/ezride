@@ -5,21 +5,24 @@ import {
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import Fonts from '../constants/fonts';
+import Avatar from './Avatar';
+import { fileUrl } from '../utils/media';
 import {useApp} from '../context/AppContext';
 import useAuth from "../hooks/useAuth";
 import useUserStore from '../store/userStore';
 import { useServiceProviderMe } from '../hooks/useServices';
+import { useModules } from '../hooks/useModules';
 
 
 const {width} = Dimensions.get('window');
 const SIDEBAR_WIDTH = width * 0.82;
 
+// `flag` gates the item by an admin module toggle; items with no flag are core.
 const NAV_ITEMS = [
     {key: 'Rides', label: 'Rides', icon: 'car-outline'},
     {key: 'RideHistory', label: 'Ride History', icon: 'history'},
-    {key: 'Services', label: 'Car Services', icon: 'wrench-outline'},
-    {key: 'Rentals', label: 'Rent a Car', icon: 'car-key'},
-    {key: 'Marketplace', label: 'Buy/Sell Cars', icon: 'tag-outline'},
+    {key: 'InspectionRequest', label: 'Inspection', icon: 'clipboard-check-outline', flag: 'inspection'},
+    {key: 'Services', label: 'Car Services', icon: 'wrench-outline', flag: 'service'},
     {key: 'Messages', label: 'Messages', icon: 'message-outline'},
 ];
 
@@ -28,6 +31,8 @@ const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
     const { logout } = useAuth();
     const user = useUserStore(s => s.user);
     const { data: spProfile } = useServiceProviderMe();
+    const { isEnabled } = useModules();
+    const navItems = NAV_ITEMS.filter(i => !i.flag || isEnabled(i.flag));
 
     const isDriver = role === 'driver';
     const isActualDriver = user?.user_type === 'driver';
@@ -64,9 +69,8 @@ const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
                     >
                         {/* User Info */}
                         <View style={styles.userSection}>
-                            <View style={styles.userAvatar}>
-                                <Text style={styles.userInitial}>{initial}</Text>
-                            </View>
+                            <Avatar uri={fileUrl(user?.profile?.profile_image)} name={fullName} size={52} bg="#FFD400" />
+
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.userName} numberOfLines={1}>{fullName}</Text>
                                 <TouchableOpacity
@@ -102,7 +106,7 @@ const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
 
                         {/* Nav Items */}
                         <View style={styles.navSection}>
-                            {NAV_ITEMS.map(item => {
+                            {navItems.map(item => {
                                 const isActive = activeRoute === item.key;
                                 return (
                                     <TouchableOpacity
@@ -129,6 +133,7 @@ const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
                             })}
 
                             {/* Service provider — register (or view profile if already one) */}
+                            {isEnabled('service') && (
                             <TouchableOpacity
                                 style={styles.navItem}
                                 onPress={() => handleNav('ServiceProviderRegister')}
@@ -139,6 +144,7 @@ const Sidebar = ({visible, onClose, navigation, activeRoute = 'Home'}) => {
                                     {spProfile ? 'My Service Profile' : 'Become a Provider'}
                                 </Text>
                             </TouchableOpacity>
+                            )}
                         </View>
 
                         {/* Bottom Section */}
